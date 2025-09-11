@@ -3,7 +3,8 @@
 import { ReactNode, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import { ROLES, type UserRole } from '@/lib/constants';
+import { ROLES } from '@/lib/constants';
+import { UserRole } from '@/types/user.types';
 import { toast } from '@/components/ui/use-toast';
 
 interface ProtectedRouteProps {
@@ -79,7 +80,7 @@ export function ProtectedRoute({
 // Helper components for common role-based routes
 export function AdminRoute({ children }: { children: ReactNode }) {
   return (
-    <ProtectedRoute allowedRoles={ROLES.ADMIN}>
+    <ProtectedRoute allowedRoles={UserRole.ADMIN}>
       {children}
     </ProtectedRoute>
   );
@@ -87,19 +88,15 @@ export function AdminRoute({ children }: { children: ReactNode }) {
 
 export function ServicePersonRoute({ children }: { children: ReactNode }) {
   return (
-    <ProtectedRoute allowedRoles={ROLES.SERVICE_PERSON}>
+    <ProtectedRoute allowedRoles={UserRole.SERVICE_PERSON}>
       {children}
     </ProtectedRoute>
   );
 }
 
-export function CustomerRoute({ children }: { children: ReactNode }) {
-  return (
-    <ProtectedRoute allowedRoles={ROLES.CUSTOMER_OWNER}>
-      {children}
-    </ProtectedRoute>
-  );
-}
+// Note: CUSTOMER_OWNER is not in the UserRole enum
+// If you need customer routes, you'll need to add it to the UserRole enum
+// in @/types/user.types.ts
 
 export function AuthRoute({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();

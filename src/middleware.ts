@@ -11,8 +11,6 @@ function getRoleBasedRedirect(role?: UserRole): string {
       return '/zone/dashboard';
     case UserRole.SERVICE_PERSON:
       return '/service-person/dashboard';
-    case UserRole.CUSTOMER_OWNER:
-      return '/customer/dashboard';
     default:
       return '/auth/login';
   }

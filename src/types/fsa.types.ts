@@ -45,6 +45,22 @@ export interface UserOption {
   name: string;
 }
 
+export interface OverviewAnalytics {
+  totalTickets: number;
+  openTickets: number;
+  inProgressTickets: number;
+  resolvedTickets: number;
+  avgResolutionTime: number;
+  customerSatisfaction: number;
+  slaCompliance: number;
+  recentActivities: Array<{
+    id: string;
+    action: string;
+    timestamp: string;
+    user: string;
+  }>;
+}
+
 export interface ExportFormat {
   type: 'PDF' | 'EXCEL' | 'CSV';
   label: string;

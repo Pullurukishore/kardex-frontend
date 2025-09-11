@@ -42,65 +42,43 @@ export interface AuthResponseUser {
   userAgent?: string | null;
   customer?: any | null;
   token?: string;
-  accessToken?: string; // Added accessToken property
+  accessToken?: string;
 }
 
 export interface AuthResponse {
   user: AuthResponseUser;
   accessToken: string;
-  refreshToken: string;
-  token?: string;
+  refreshToken?: string;
 }
 
+// Check if token is expired or about to expire (within 5 minutes)
+export const isTokenExpired = (token: string): boolean => {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    const now = Date.now() / 1000;
+    const buffer = 300; // 5 minutes in seconds
+    return payload.exp < (now + buffer);
+  } catch (e) {
+    return true; // If we can't parse the token, assume it's expired
+  }
+};
+
 export const authService = {
-  async login(credentials: LoginCredentials): Promise<AuthResponse> {
-    try {
-      console.log('Sending login request with credentials:', { 
-        email: credentials.email, 
-        hasPassword: !!credentials.password 
-      });
-      
-      const response = await api.post('/auth/login', credentials);
-      console.log('Raw login response:', response);
-      
-      if (!response.data) {
-        throw new Error('Empty response from server');
-      }
-      
-      // Handle case where response might be a string 'y' or similar
-      if (typeof response.data === 'string') {
-        console.warn('Unexpected string response from server:', response.data);
-        throw new Error('Invalid server response format');
-      }
-      
-      const { token, refreshToken, ...user } = response.data;
-      
-      if (!token) {
-        console.error('No token in response:', response.data);
-        throw new Error('Authentication failed: No token received');
-      }
-      
-      return {
-        user,
-        accessToken: token,
-        refreshToken: refreshToken || ''
-      };
-    } catch (error) {
-      console.error('Login error:', error);
-      throw error;
-    }
+  login: async (credentials: LoginCredentials): Promise<AuthResponse> => {
+    const response = await api.post<AuthResponse>('/auth/login', credentials);
+    return response.data;
   },
 
-  async register(userData: RegisterData): Promise<AuthResponse> {
-    const { data } = await api.post<AuthResponse>('/auth/register', userData);
-    return data;
+  register: async (userData: RegisterData): Promise<AuthResponse> => {
+    const response = await api.post<AuthResponse>('/auth/register', userData);
+    return response.data;
   },
 
-  async logout(): Promise<void> {
+  logout: async (): Promise<void> => {
     await api.post('/auth/logout');
   },
 
-  async getCurrentUser(): Promise<AuthResponseUser> {
+  getCurrentUser: async (): Promise<AuthResponseUser> => {
     const { data } = await api.get<AuthResponseUser>('/auth/me');
     return {
       ...data,
@@ -111,8 +89,29 @@ export const authService = {
     };
   },
 
-  async refreshToken(): Promise<{ accessToken: string }> {
-    const { data } = await api.post<{ accessToken: string }>('/auth/refresh-token');
-    return data;
+  refreshToken: (): Promise<{ accessToken: string }> => {
+    return new Promise((resolve, reject) => {
+      api.post<{ accessToken: string }>('/auth/refresh-token', {}, { withCredentials: true })
+        .then(response => {
+          if (response.data?.accessToken) {
+            resolve(response.data);
+          } else {
+            throw new Error('No access token in response');
+          }
+        })
+        .catch(error => {
+          if (typeof window !== 'undefined') {
+            // Clear cookies
+            document.cookie = 'accessToken=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';
+            document.cookie = 'refreshToken=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';
+            if (window.location.pathname !== '/login') {
+              window.location.href = '/login';
+            }
+          }
+          reject(error);
+        });
+    });
   },
 };
+
+export default authService;

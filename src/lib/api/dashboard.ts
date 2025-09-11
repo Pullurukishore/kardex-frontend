@@ -6,7 +6,8 @@ import {
   RecentTicket, 
   TicketTrend, 
   ZoneWiseTicket,
-  DashboardStats
+  DashboardStats,
+  ZonePerformanceMetrics
 } from '@/types/dashboard.types';
 
 /**
@@ -112,9 +113,33 @@ export const fetchSlaCompliance = async (): Promise<number> => {
 export const fetchAvgResponseTime = async (): Promise<number> => {
   try {
     const response = await apiClient.get('/dashboard/metrics/avg-response-time');
-    return response.data.avgResponseTime;
+    return response.data.averageResponseTime;
   } catch (error) {
     console.error('Error fetching average response time:', error);
-    return 0;
+    throw error;
+  }
+};
+
+/**
+ * Fetches detailed performance metrics for a specific zone
+ * @param zoneId The ID of the zone to fetch metrics for
+ */
+export const fetchZonePerformanceMetrics = async (zoneId: string): Promise<ZonePerformanceMetrics> => {
+  try {
+    // Try the FSA dashboard endpoint first
+    try {
+      const response = await apiClient.get(`/zone-dashboard/fsa/${zoneId}`);
+      console.log('FSA Dashboard Response:', response.data);
+      return response.data;
+    } catch (fsaError) {
+      console.debug('FSA dashboard endpoint not available, falling back to service-zones stats endpoint', fsaError);
+      // Fall back to the service-zones stats endpoint if FSA dashboard is not available
+      const response = await apiClient.get(`/service-zones/${zoneId}/stats`);
+      console.log('Service Zone Stats Response:', response.data);
+      return response.data;
+    }
+  } catch (error) {
+    console.error(`Error fetching metrics for zone ${zoneId}:`, error);
+    throw new Error('Failed to fetch service zone stats');
   }
 };

@@ -95,6 +95,52 @@ export interface DashboardStats {
   recentActivity: any[];
 }
 
+export interface ServicePersonPerformance {
+  id: number;
+  name: string;
+  email: string;
+  totalTickets: number;
+  resolvedTickets: number;
+  inProgressTickets: number;
+  pendingTickets: number;
+  avgResolutionTime: string;
+  responseTime: string;
+  satisfactionScore: number;
+  lastActive: string;
+  currentStatus: 'AVAILABLE' | 'ON_SITE' | 'ON_LEAVE' | 'OFFLINE';
+}
+
+export interface ZonePerformanceMetrics {
+  zoneId: string;
+  zoneName: string;
+  totalTickets: number;
+  openTickets: number;
+  resolvedTickets: number;
+  inProgressTickets: number;
+  avgResolutionTime: string;
+  avgResponseTime: string;
+  customerSatisfaction: number;
+  servicePersonCount: number;
+  customerCount: number;
+  ticketTrends: TicketTrend[];
+  statusDistribution: Array<{ status: string; count: number }>;
+  priorityDistribution: Array<{ priority: string; count: number }>;
+  servicePersons: ServicePersonPerformance[];
+  topPerformingServicePersons: ServicePersonPerformance[];
+  recentActivities: Array<{
+    id: number;
+    type: 'TICKET_CREATED' | 'TICKET_UPDATED' | 'SERVICE_VISIT' | 'STATUS_CHANGE';
+    title: string;
+    description: string;
+    timestamp: string;
+    user?: {
+      id: number;
+      name: string;
+      role: UserRole;
+    };
+  }>;
+}
+
 export interface DashboardData {
   stats: {
     kpis: DashboardKPIs;

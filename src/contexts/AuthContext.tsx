@@ -14,13 +14,19 @@ import { toast } from 'sonner';
 import { authService } from '@/services/auth.service';
 import { UserRole, type User } from '@/types/user.types';
 
+export type LoginResponse = {
+  success: boolean;
+  user?: User;
+  error?: string;
+};
+
 export type AuthContextType = {
   user: User | null;
   accessToken: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<LoginResponse>;
   register: (userData: {
     name: string;
     email: string;
@@ -144,70 +150,101 @@ function AuthProvider({ children }: { children: ReactNode }) {
   }, [pathname, router, loadUser]);
 
   const login = async (email: string, password: string) => {
+    const startTime = performance.now();
     setIsLoading(true);
     setError(null);
 
     try {
+      console.time('login-api-call');
       const response = await authService.login({ email, password });
-      if (!response?.user || !response.accessToken) {
+      console.timeEnd('login-api-call');
+      
+      if (!response || !response.user || !response.accessToken) {
+        console.error('Invalid login response:', response);
         throw new Error('Invalid login response from server');
       }
 
-      setCookie('accessToken', response.accessToken, { path: '/', secure: process.env.NODE_ENV === 'production', sameSite: 'lax' });
-      setCookie('refreshToken', response.refreshToken, { path: '/', secure: process.env.NODE_ENV === 'production', sameSite: 'lax' });
+      console.log('Login response:', {
+        hasUser: !!response.user,
+        hasToken: !!response.accessToken,
+        userRole: response.user?.role
+      });
 
-      setAccessToken(response.accessToken);
-
+      // Process user data first to ensure all required fields are set
       const safeUser: User = {
-        ...response.user,
+        id: response.user.id,
+        email: response.user.email || email,
         name: response.user.name || response.user.email?.split('@')[0] || 'User',
+        role: response.user.role || 'customer', // Default to 'customer' if role is missing
         isActive: response.user.isActive ?? true,
         tokenVersion: response.user.tokenVersion || '0',
         lastPasswordChange: response.user.lastPasswordChange || new Date().toISOString(),
+        // Include any additional user fields that might be needed
+        ...(response.user.phone && { phone: response.user.phone }),
+        ...(response.user.companyName && { companyName: response.user.companyName }),
+        ...(response.user.zoneId && { zoneId: response.user.zoneId }),
       };
 
+      console.log('Processed user:', safeUser);
+
+      // Set cookies with proper values
+      const cookieOptions = {
+        path: '/',
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax' as const,
+      };
+
+      console.log('Setting cookies with options:', {
+        ...cookieOptions,
+        accessTokenMaxAge: '15m',
+        refreshTokenMaxAge: '7d',
+        userRoleMaxAge: '7d',
+      });
+
+      setCookie('accessToken', response.accessToken, {
+        ...cookieOptions,
+        maxAge: 60 * 60 * 24, // 1 day for access token (1440 minutes)
+      });
+      
+      setCookie('refreshToken', response.refreshToken || '', {
+        ...cookieOptions,
+        maxAge: 60 * 60 * 24 * 7, // 7 days for refresh token
+      });
+
+      // Update state
+      setAccessToken(response.accessToken);
       setUser(safeUser);
 
-      // Decode the access token to get the role if not present in user object
-      let userRole = safeUser.role;
-      if (!userRole && response.accessToken) {
-        try {
-          const payload = JSON.parse(atob(response.accessToken.split('.')[1]));
-          userRole = payload.role || userRole;
-        } catch (e) {
-          console.warn('Failed to decode access token:', e);
-        }
-      }
+      // Set role cookie
+      setCookie('userRole', safeUser.role, {
+        ...cookieOptions,
+        maxAge: 60 * 60 * 24 * 7, // 7 days to match refresh token
+      });
 
-      if (userRole) {
-        setCookie('userRole', userRole, { 
-          path: '/', 
-          secure: process.env.NODE_ENV === 'production', 
-          sameSite: 'lax',
-          maxAge: 60 * 60 * 24 * 7 // 7 days to match refresh token
-        });
-      } else {
-        console.error('No role found in user object or JWT token');
-      }
+      console.timeEnd('login-setup');
+      console.log('Auth state updated', { hasToken: true, hasUser: true, isAuthenticated: true });
 
+      // Show success message
       toast.success(`Welcome back, ${safeUser.name}!`, {
         description: `You are logged in as ${safeUser.role.toLowerCase().replace('_', ' ')}`,
       });
 
       // Get the redirect path based on user role
       const redirectPath = getRoleBasedRedirect(safeUser.role);
+      console.log(`Login successful, redirecting to: ${redirectPath}`);
       
-      // Only redirect if we're not already on the correct path
-      if (pathname !== redirectPath) {
-        console.log(`Redirecting to: ${redirectPath}`);
-        router.replace(redirectPath);
-      }
-    } catch (err: any) {
-      console.error('Login failed:', err);
-      const errorMessage = err?.response?.data?.message || 'Login failed. Please try again.';
+      // Use replace instead of push to prevent adding to browser history
+      router.replace(redirectPath);
+      
+      console.log(`Login process completed in ${performance.now() - startTime}ms`);
+      
+      return { success: true, user: safeUser };
+    } catch (error: any) {
+      console.error('Login error:', error);
+      const errorMessage = error?.response?.data?.message || 'Login failed. Please try again.';
       setError(errorMessage);
       toast.error(errorMessage);
-      throw err;
+      return { success: false, error: errorMessage };
     } finally {
       setIsLoading(false);
     }
@@ -219,12 +256,26 @@ function AuthProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       console.error('Logout error:', err);
     } finally {
+      // Clear all auth-related cookies
+      const cookieOptions = {
+        path: '/',
+        domain: window.location.hostname,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax' as const
+      };
+      
+      // Clear all possible auth cookies
+      deleteCookie('accessToken', cookieOptions);
+      deleteCookie('refreshToken', cookieOptions);
+      deleteCookie('token', cookieOptions);
+      deleteCookie('userRole', cookieOptions);
+      
+      // Clear state
       setUser(null);
       setAccessToken(null);
-      deleteCookie('accessToken');
-      deleteCookie('refreshToken');
-      deleteCookie('userRole');
-      router.replace('/auth/login');
+      
+      // Force a hard redirect to login without callbackUrl
+      window.location.href = '/auth/login';
     }
   };
 

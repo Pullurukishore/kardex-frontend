@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { UserRole } from '@/contexts/AuthContext';
+import { UserRole } from '@/types/user.types';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -52,7 +52,7 @@ export default function RegisterPage() {
 
   // Show/hide fields based on role selection
   React.useEffect(() => {
-    setShowCompanyField(role === UserRole.CUSTOMER_OWNER);
+    setShowCompanyField(false); // No longer needed as CUSTOMER_OWNER is removed
     setShowZoneField(role === UserRole.ZONE_USER || role === UserRole.SERVICE_PERSON);
   }, [role]);
 
@@ -61,8 +61,6 @@ export default function RegisterPage() {
       const { confirmPassword, ...registrationData } = values;
       await registerUser({
         ...registrationData,
-        // Only include companyName if it's a CUSTOMER_OWNER
-        ...(role !== UserRole.CUSTOMER_OWNER && { companyName: undefined }),
         // Only include zoneId if it's a ZONE_USER or SERVICE_PERSON
         ...(![UserRole.ZONE_USER, UserRole.SERVICE_PERSON].includes(role) && { zoneId: undefined }),
       });
@@ -220,8 +218,8 @@ export default function RegisterPage() {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value={UserRole.CUSTOMER_OWNER} className="flex items-center gap-2">
-                          <span>👔</span> Customer Owner
+                        <SelectItem value={UserRole.ADMIN} className="flex items-center gap-2">
+                          <span>👔</span> Admin
                         </SelectItem>
                         <SelectItem value={UserRole.ZONE_USER} className="flex items-center gap-2">
                           <span>🌍</span> Zone User
@@ -236,7 +234,7 @@ export default function RegisterPage() {
                 )}
               />
               
-              {showCompanyField && (
+              {showCompanyField && false && (
                 <FormField
                   control={form.control}
                   name="companyName"

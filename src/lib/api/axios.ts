@@ -1,5 +1,6 @@
 import axios, { AxiosError, AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
 import { getCookie, setCookie, deleteCookie } from 'cookies-next';
+import { isTokenExpired } from '@/services/auth.service';
 import { API_BASE_URL } from '../constants';
 
 export class ApiError extends Error {
@@ -22,13 +23,44 @@ const api: AxiosInstance = axios.create({
   withCredentials: true,
 });
 
-// Request interceptor to add auth token
+// Request interceptor to add auth token and handle token refresh
 api.interceptors.request.use(
-  (config) => {
+  async (config) => {
     const token = getCookie('accessToken');
+    
     if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+      // Check if token is expired or about to expire
+      if (isTokenExpired(token)) {
+        try {
+          // Skip if already refreshing to prevent multiple refresh attempts
+          if (!window.__isRefreshing) {
+            window.__isRefreshing = true;
+            const response = await axios.post(
+              `${API_BASE_URL}/auth/refresh-token`,
+              {},
+              { withCredentials: true }
+            );
+            
+            if (response.data.accessToken) {
+              setCookie('accessToken', response.data.accessToken);
+              config.headers.Authorization = `Bearer ${response.data.accessToken}`;
+            }
+          }
+        } catch (error) {
+          // If refresh fails, clear tokens and redirect to login
+          deleteCookie('accessToken');
+          if (window.location.pathname !== '/login') {
+            window.location.href = '/login';
+          }
+          return Promise.reject(error);
+        } finally {
+          window.__isRefreshing = false;
+        }
+      } else {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
     }
+    
     return config;
   },
   (error) => {
@@ -36,43 +68,79 @@ api.interceptors.request.use(
   }
 );
 
+// Add global type for refresh flag
+declare global {
+  interface Window {
+    __isRefreshing: boolean;
+  }
+}
+
+// Initialize refresh flag
+if (typeof window !== 'undefined') {
+  window.__isRefreshing = false;
+}
+
 // Response interceptor to handle token refresh
 api.interceptors.response.use(
   (response: AxiosResponse) => response,
   async (error: AxiosError) => {
     const originalRequest = error.config as any;
+    
+    // Don't intercept if the request is for login or refresh-token endpoints
+    if (originalRequest.url?.includes('/auth/login') || 
+        originalRequest.url?.includes('/auth/refresh-token')) {
+      return Promise.reject(error);
+    }
 
     // If error is 401 and we haven't already tried to refresh
     if (error.response?.status === 401 && !originalRequest._retry) {
+      // If we're already on the login page, don't try to refresh
+      if (window.location.pathname === '/login') {
+        return Promise.reject(error);
+      }
+      
       originalRequest._retry = true;
 
       try {
-        const refreshToken = getCookie('refreshToken');
-        if (!refreshToken) {
-          // No refresh token, redirect to login
-          window.location.href = '/login';
-          return Promise.reject(error);
-        }
-
-        // Try to refresh the token
+        // Get refresh token from httpOnly cookie (handled automatically with credentials)
         const response = await axios.post(
           `${API_BASE_URL}/auth/refresh-token`,
           {},
-          { withCredentials: true }
+          {
+            withCredentials: true,
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          }
         );
-
-        const { accessToken } = response.data;
-        setCookie('accessToken', accessToken);
         
-        // Retry the original request with new token
-        originalRequest.headers.Authorization = `Bearer ${accessToken}`;
-        return api(originalRequest);
+        const { accessToken } = response.data;
+        if (accessToken) {
+          // Update the authorization header for the original request
+          originalRequest.headers.Authorization = `Bearer ${accessToken}`;
+          // Retry the original request with new token
+          return api(originalRequest);
+        }
+        throw new Error('No access token in response');
       } catch (error) {
-        // If refresh fails, clear tokens and redirect to login
-        deleteCookie('accessToken');
-        deleteCookie('refreshToken');
-        window.location.href = '/login';
+        // Clear any existing tokens
+        if (typeof window !== 'undefined') {
+          deleteCookie('accessToken');
+          // Don't delete refreshToken cookie as it's httpOnly
+          
+          // Only redirect to login if not already there
+          if (window.location.pathname !== '/login') {
+            window.location.href = '/login';
+          }
+        }
         return Promise.reject(error);
+      }
+    }
+
+    // Handle 403 Forbidden (token might be invalid or expired)
+    if (error.response?.status === 403) {
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
       }
     }
 

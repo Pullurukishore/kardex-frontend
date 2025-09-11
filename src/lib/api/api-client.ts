@@ -1,5 +1,25 @@
 import axios, { AxiosError, AxiosInstance, AxiosRequestConfig } from 'axios';
-import { getCookie, setCookie, deleteCookie } from 'cookies-next';
+// Token management helpers
+const getToken = (): string | null => {
+  if (typeof window !== 'undefined') {
+    // Check both token keys for backward compatibility
+    return localStorage.getItem('accessToken') || localStorage.getItem('token');
+  }
+  return null;
+};
+
+const setToken = (token: string): void => {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('accessToken', token);
+  }
+};
+
+const removeToken = (): void => {
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
+  }
+};
 import { toast } from 'sonner';
 
 export interface ApiResponse<T = any> {
@@ -37,7 +57,7 @@ class ApiClient {
 
   private constructor() {
     this.client = axios.create({
-      baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api',
+      baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api',
       withCredentials: true,
       headers: {
         'Content-Type': 'application/json',
@@ -58,13 +78,16 @@ class ApiClient {
     // Request interceptor
     this.client.interceptors.request.use(
       (config) => {
-        const token = getCookie('accessToken');
-        if (token && !config.headers['Authorization']) {
+        const token = getToken();
+        if (token) {
           config.headers['Authorization'] = `Bearer ${token}`;
+        } else {
+          console.warn('No access token found in local storage');
         }
         return config;
       },
       (error) => {
+        console.error('Request interceptor error:', error);
         return Promise.reject(error);
       }
     );
@@ -85,8 +108,13 @@ class ApiClient {
         if (this.isRefreshing) {
           return new Promise((resolve, reject) => {
             this.refreshSubscribers.push((token: string) => {
-              originalRequest.headers['Authorization'] = `Bearer ${token}`;
-              resolve(this.client(originalRequest));
+              if (token) {
+                originalRequest.headers['Authorization'] = `Bearer ${token}`;
+                resolve(this.client(originalRequest));
+              } else {
+                reject(new Error('Failed to refresh token'));
+                this.logout();
+              }
             });
           });
         }
@@ -96,18 +124,18 @@ class ApiClient {
         this.isRefreshing = true;
 
         try {
+          const refreshToken = typeof window !== 'undefined' ? localStorage.getItem('refreshToken') : null;
+          if (!refreshToken) {
+            throw new Error('No refresh token available');
+          }
           const { data } = await this.client.post<ApiResponse<{ accessToken: string }>>(
             '/auth/refresh-token',
-            { refreshToken: getCookie('refreshToken') }
+            { refreshToken }
           );
 
           if (data.success && data.data?.accessToken) {
             const { accessToken } = data.data;
-            setCookie('accessToken', accessToken, {
-              httpOnly: true,
-              secure: process.env.NODE_ENV === 'production',
-              sameSite: 'strict',
-            });
+            setToken(accessToken);
 
             // Update Authorization header
             this.client.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
@@ -161,11 +189,15 @@ class ApiClient {
     }
   }
 
-  public logout(): void {
-    deleteCookie('accessToken');
-    deleteCookie('refreshToken');
-    deleteCookie('userRole');
-    window.location.href = '/login';
+  public logout(redirectToLogin: boolean = true): void {
+    removeToken();
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('userRole');
+      localStorage.removeItem('user');
+      if (redirectToLogin) {
+        window.location.href = '/login';
+      }
+    }
   }
 
   // HTTP Methods

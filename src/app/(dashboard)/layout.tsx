@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect } from 'react';
+import { TooltipProvider } from '@/components/ui/tooltip';
 
 export default function DashboardRootLayout({
   children,
@@ -33,8 +34,10 @@ export default function DashboardRootLayout({
   }
 
   return (
-    <DashboardLayout userRole={user.role}>
-      {children}
-    </DashboardLayout>
+    <TooltipProvider>
+      <DashboardLayout userRole={user.role}>
+        {children}
+      </DashboardLayout>
+    </TooltipProvider>
   );
 }

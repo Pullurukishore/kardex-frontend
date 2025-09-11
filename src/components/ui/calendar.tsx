@@ -3,7 +3,9 @@
 import * as React from 'react';
 import { format } from 'date-fns';
 import { Calendar as CalendarIcon } from 'lucide-react';
-import type { DateRange, DayPickerProps } from 'react-day-picker';
+import type { DateRange as ReactDayPickerDateRange, DayPickerProps } from 'react-day-picker';
+
+export type DateRange = ReactDayPickerDateRange;
 
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
