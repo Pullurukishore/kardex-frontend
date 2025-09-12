@@ -137,12 +137,8 @@ api.interceptors.response.use(
       }
     }
 
-    // Handle 403 Forbidden (token might be invalid or expired)
-    if (error.response?.status === 403) {
-      if (window.location.pathname !== '/login') {
-        window.location.href = '/login';
-      }
-    }
+    // For 403 Forbidden, do NOT auto-redirect; allow callers to surface errors
+    // This prevents losing context (e.g., while generating reports)
 
     return Promise.reject(error);
   }

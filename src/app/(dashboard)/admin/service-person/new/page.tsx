@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Save } from 'lucide-react';
+import { ArrowLeft, Save, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -23,6 +23,7 @@ interface ServiceZone {
 }
 
 const createServicePersonSchema = z.object({
+  name: z.string().min(2, 'Name must be at least 2 characters'),
   email: z.string().email('Please enter a valid email address'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
   confirmPassword: z.string(),
@@ -39,16 +40,17 @@ export default function NewServicePersonPage() {
   const [loading, setLoading] = useState(false);
   const [serviceZones, setServiceZones] = useState<ServiceZone[]>([]);
   const [selectedZones, setSelectedZones] = useState<number[]>([]);
+  const [created, setCreated] = useState(false);
 
   const {
     register,
     handleSubmit,
     formState: { errors },
     setValue,
-    watch,
   } = useForm<CreateServicePersonForm>({
     resolver: zodResolver(createServicePersonSchema),
     defaultValues: {
+      name: '',
       email: '',
       password: '',
       confirmPassword: '',
@@ -102,6 +104,7 @@ export default function NewServicePersonPage() {
       setLoading(true);
 
       const payload = {
+        name: data.name,
         email: data.email,
         password: data.password,
         serviceZoneIds: selectedZones,
@@ -118,9 +121,8 @@ export default function NewServicePersonPage() {
         description: 'Service person created successfully',
       });
 
-      // Redirect to the service persons list page
-      router.push('/admin/service-person');
-      router.refresh(); // Refresh the route to ensure the list is up to date
+      // Show success screen, then redirect shortly after
+      setCreated(true);
     } catch (error: any) {
       console.error('Error creating service person:', error);
       toast({
@@ -132,6 +134,46 @@ export default function NewServicePersonPage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (created) {
+      const timeoutId = setTimeout(() => {
+        router.push('/admin/service-person');
+        router.refresh();
+      }, 2000);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [created, router]);
+
+  if (created) {
+    return (
+      <div className="container mx-auto py-12 max-w-lg">
+        <Card className="text-center">
+          <CardHeader>
+            <div className="flex justify-center mb-2">
+              <CheckCircle className="h-12 w-12 text-green-600" />
+            </div>
+            <CardTitle>Service Person Created</CardTitle>
+            <CardDescription>Redirecting to the Service Persons list...</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-center gap-3">
+              <Link href="/admin/service-person">
+                <Button>
+                  Go to Service Persons
+                </Button>
+              </Link>
+              <Link href="/admin/service-person/new">
+                <Button variant="outline">
+                  Create Another
+                </Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto py-6 max-w-2xl">
@@ -161,18 +203,33 @@ export default function NewServicePersonPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">Email Address *</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="Enter email address"
-                {...register('email')}
-                className={errors.email ? 'border-red-500' : ''}
-              />
-              {errors.email && (
-                <p className="text-sm text-red-500">{errors.email.message}</p>
-              )}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Full Name *</Label>
+                <Input
+                  id="name"
+                  type="text"
+                  placeholder="Enter full name"
+                  {...register('name')}
+                  className={errors.name ? 'border-red-500' : ''}
+                />
+                {errors.name && (
+                  <p className="text-sm text-red-500">{errors.name.message}</p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="email">Email Address *</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="Enter email address"
+                  {...register('email')}
+                  className={errors.email ? 'border-red-500' : ''}
+                />
+                {errors.email && (
+                  <p className="text-sm text-red-500">{errors.email.message}</p>
+                )}
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

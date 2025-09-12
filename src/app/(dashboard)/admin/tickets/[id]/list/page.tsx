@@ -388,17 +388,26 @@ export default function TicketDetailPage() {
                 </Button>
                 <Button 
                   onClick={async () => {
-                    // Directly open service person selection
-                    const servicePersons = await api.get('/users/service-persons');
-                    if (servicePersons.data.length === 0) {
+                    try {
+                      // Directly open service person selection
+                      const servicePersons = await api.get('/service-persons');
+                      if (servicePersons.data.length === 0) {
+                        toast({
+                          title: 'No Service Persons',
+                          description: 'There are no service persons available for assignment',
+                          variant: 'destructive',
+                        });
+                        return;
+                      }
+                      setIsAssignDialogOpen(true);
+                    } catch (error) {
+                      console.error('Error fetching service persons:', error);
                       toast({
-                        title: 'No Service Persons',
-                        description: 'There are no service persons available for assignment',
+                        title: 'Error',
+                        description: 'Failed to load service persons. Please try again.',
                         variant: 'destructive',
                       });
-                      return;
                     }
-                    setIsAssignDialogOpen(true);
                   }}
                   disabled={!ticket}
                   variant="outline"

@@ -6,8 +6,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Plus, Search, Edit, Trash2, Users, MapPin, BarChart3 } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, Users, MapPin, BarChart3, Building, UserCheck, MoreHorizontal } from 'lucide-react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getServiceZones, deleteServiceZone, ServiceZonesResponse } from '@/services/zone.service';
 import { useToast } from '@/components/ui/use-toast';
 import type { ServiceZone } from '@/types/zone';
@@ -27,7 +28,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { MoreHorizontal } from 'lucide-react';
 
 // Remove duplicate interface - it's already exported from zone.service.ts
 
@@ -121,138 +121,246 @@ export default function ServiceZonesPage() {
     router.push(`/admin/service-zones/${zone.id}`);
   };
 
+  // Calculate stats
+  const totalZones = zones.length;
+  const activeZones = zones.filter(z => z.isActive).length;
+  const inactiveZones = totalZones - activeZones;
+  const totalServicePersons = zones.reduce((acc, zone) => acc + (zone._count?.servicePersons || 0), 0);
+  const totalCustomers = zones.reduce((acc, zone) => acc + (zone._count?.customers || 0), 0);
+  const totalTickets = zones.reduce((acc, zone) => acc + (zone._count?.tickets || 0), 0);
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Service Zones</h1>
-          <p className="text-muted-foreground">
-            Manage service zones for organizing customer locations
-          </p>
+    <div className="container mx-auto py-6 space-y-6">
+      {/* Header with Gradient */}
+      <div className="relative overflow-hidden rounded-lg bg-gradient-to-r from-green-600 via-teal-600 to-green-800 p-6 text-white">
+        <div className="absolute inset-0 bg-black/20"></div>
+        <div className="relative flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold mb-2">Service Zones</h1>
+            <p className="text-green-100">
+              Manage service zones for organizing customer locations
+            </p>
+          </div>
+          <Button 
+            onClick={() => router.push('/admin/service-zones/new')}
+            className="bg-white text-green-600 hover:bg-green-50 shadow-lg"
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Add Service Zone
+          </Button>
         </div>
-        <Button onClick={() => router.push('/admin/service-zones/new')}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add Service Zone
-        </Button>
       </div>
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle>Service Zones</CardTitle>
-            <div className="relative w-64">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                type="search"
-                placeholder="Search zones..."
-                className="pl-8"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-green-600">Total Zones</p>
+                <p className="text-2xl font-bold text-green-900">{totalZones}</p>
+              </div>
+              <div className="h-12 w-12 rounded-full bg-green-500 flex items-center justify-center">
+                <MapPin className="h-6 w-6 text-white" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-blue-600">Active Zones</p>
+                <p className="text-2xl font-bold text-blue-900">{activeZones}</p>
+              </div>
+              <div className="h-12 w-12 rounded-full bg-blue-500 flex items-center justify-center">
+                <UserCheck className="h-6 w-6 text-white" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-purple-600">Service Personnel</p>
+                <p className="text-2xl font-bold text-purple-900">{totalServicePersons}</p>
+              </div>
+              <div className="h-12 w-12 rounded-full bg-purple-500 flex items-center justify-center">
+                <Users className="h-6 w-6 text-white" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-orange-600">Total Customers</p>
+                <p className="text-2xl font-bold text-orange-900">{totalCustomers}</p>
+              </div>
+              <div className="h-12 w-12 rounded-full bg-orange-500 flex items-center justify-center">
+                <Building className="h-6 w-6 text-white" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Enhanced Search and Filters */}
+      <Card className="shadow-lg">
+        <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100 rounded-t-lg">
+          <CardTitle className="text-gray-800">Search & Filter</CardTitle>
+        </CardHeader>
+        <CardContent className="pt-6">
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex-1">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <Input
+                  type="search"
+                  placeholder="Search zones by name or description..."
+                  className="pl-10 focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Enhanced Service Zones Table */}
+      <Card className="shadow-lg">
+        <CardHeader className="bg-gradient-to-r from-green-50 to-teal-50 rounded-t-lg">
+          <CardTitle className="text-gray-800 flex items-center gap-2">
+            <MapPin className="h-5 w-5 text-green-600" />
+            Service Zones ({filteredZones.length})
+          </CardTitle>
+          <CardDescription>
+            Manage and monitor your service zones
+          </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0">
           {isLoading ? (
             <div className="flex items-center justify-center h-32">
-              <p>Loading service zones...</p>
+              <div className="text-lg text-gray-600">Loading service zones...</div>
             </div>
           ) : filteredZones.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-32 text-muted-foreground">
-              <p>No service zones found</p>
+            <div className="text-center py-12">
+              <div className="mx-auto h-24 w-24 rounded-full bg-gradient-to-br from-green-100 to-teal-100 flex items-center justify-center mb-4">
+                <MapPin className="h-12 w-12 text-green-500" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">No service zones found</h3>
+              <p className="text-gray-500 mb-6">
+                Get started by creating your first service zone.
+              </p>
               <Button 
-                variant="link" 
-                className="mt-2"
                 onClick={() => router.push('/admin/service-zones/new')}
+                className="bg-gradient-to-r from-green-600 to-teal-600 hover:from-green-700 hover:to-teal-700 shadow-lg"
               >
-                Create a new service zone
+                <Plus className="mr-2 h-4 w-4" />
+                Create Service Zone
               </Button>
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Service Persons</TableHead>
-                  <TableHead>Zone Users</TableHead>
-                  <TableHead>Customers</TableHead>
-                  <TableHead>Tickets</TableHead>
-                  <TableHead>Location</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead className="w-[70px]">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredZones.map((zone) => (
-                  <TableRow key={zone.id}>
-                    <TableCell className="font-medium">{zone.name}</TableCell>
-                    <TableCell>
-                      <Badge variant={zone.isActive ? 'default' : 'secondary'}>
-                        {zone.isActive ? 'Active' : 'Inactive'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Users className="h-4 w-4 text-muted-foreground" />
-                        <span>{zone._count?.servicePersons || 0}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Users className="h-4 w-4 text-blue-500" />
-                        <span>{zone._count?.zoneUsers || 0}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <MapPin className="h-4 w-4 text-muted-foreground" />
-                        <span>{zone._count?.customers || 0}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <BarChart3 className="h-4 w-4 text-muted-foreground" />
-                        <span>{zone._count?.tickets || 0}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground max-w-[200px] truncate">
-                      {zone.description || 'No description'}
-                    </TableCell>
-                    <TableCell>
-                      {new Date(zone.createdAt).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" className="h-8 w-8 p-0">
-                            <span className="sr-only">Open menu</span>
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => handleViewStats(zone)}>
-                            <BarChart3 className="mr-2 h-4 w-4" />
-                            View Details
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleEdit(zone)}>
-                            <Edit className="mr-2 h-4 w-4" />
-                            Edit
-                          </DropdownMenuItem>
-                          <DropdownMenuItem 
-                            onClick={() => handleDelete(zone)}
-                            className="text-destructive"
-                          >
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader className="bg-gray-50">
+                  <TableRow>
+                    <TableHead className="font-semibold text-gray-700 py-4 px-6">Zone Details</TableHead>
+                    <TableHead className="font-semibold text-gray-700 py-4 px-6">Status</TableHead>
+                    <TableHead className="font-semibold text-gray-700 py-4 px-6">Personnel</TableHead>
+                    <TableHead className="font-semibold text-gray-700 py-4 px-6">Customers</TableHead>
+                    <TableHead className="font-semibold text-gray-700 py-4 px-6">Tickets</TableHead>
+                    <TableHead className="font-semibold text-gray-700 py-4 px-6">Created</TableHead>
+                    <TableHead className="font-semibold text-gray-700 py-4 px-6 text-right">Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody className="divide-y divide-gray-100">
+                  {filteredZones.map((zone, index) => (
+                    <TableRow key={zone.id} className="hover:bg-gradient-to-r hover:from-green-50/50 hover:to-teal-50/50 transition-all duration-200">
+                      <TableCell className="py-4 px-6">
+                        <div className="flex items-center gap-3">
+                          <div className="h-10 w-10 rounded-full bg-gradient-to-br from-green-500 to-teal-600 flex items-center justify-center text-white font-semibold">
+                            {zone.name.charAt(0).toUpperCase()}
+                          </div>
+                          <div>
+                            <div className="font-semibold text-gray-900">{zone.name}</div>
+                            <div className="text-sm text-gray-500 max-w-xs truncate">
+                              {zone.description || 'No description'}
+                            </div>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="py-4 px-6">
+                        <Badge 
+                          variant={zone.isActive ? 'default' : 'secondary'}
+                          className={zone.isActive 
+                            ? 'bg-green-100 text-green-800 hover:bg-green-200' 
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          }
+                        >
+                          {zone.isActive ? 'Active' : 'Inactive'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="py-4 px-6">
+                        <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1 bg-purple-50 px-2 py-1 rounded-md">
+                            <Users className="h-4 w-4 text-purple-600" />
+                            <span className="text-sm font-medium text-purple-700">{zone._count?.servicePersons || 0}</span>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="py-4 px-6">
+                        <div className="flex items-center gap-1 bg-orange-50 px-2 py-1 rounded-md">
+                          <Building className="h-4 w-4 text-orange-600" />
+                          <span className="text-sm font-medium text-orange-700">{zone._count?.customers || 0}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="py-4 px-6">
+                        <div className="flex items-center gap-1 bg-blue-50 px-2 py-1 rounded-md">
+                          <BarChart3 className="h-4 w-4 text-blue-600" />
+                          <span className="text-sm font-medium text-blue-700">{zone._count?.tickets || 0}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="py-4 px-6 text-gray-600">
+                        {new Date(zone.createdAt).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell className="py-4 px-6 text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm" className="hover:bg-gray-100">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-48">
+                            <DropdownMenuItem onClick={() => handleViewStats(zone)}>
+                              <BarChart3 className="mr-2 h-4 w-4 text-blue-500" />
+                              View Details
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleEdit(zone)}>
+                              <Edit className="mr-2 h-4 w-4 text-green-500" />
+                              Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={() => handleDelete(zone)}
+                              className="text-red-600 focus:text-red-600 focus:bg-red-50"
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>

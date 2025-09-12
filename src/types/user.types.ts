@@ -4,6 +4,14 @@ export enum UserRole {
   SERVICE_PERSON = 'SERVICE_PERSON',
 }
 
+export interface ServiceZone {
+  serviceZoneId: number;
+  serviceZone: {
+    id: number;
+    name: string;
+  };
+}
+
 export type User = {
   id: string | number;  // Handle both string and number IDs
   email: string;
@@ -11,6 +19,9 @@ export type User = {
   name: string | null;  // Allow null for name
   isActive?: boolean;
   tokenVersion?: string | number;  // Handle both string and number token versions
+  customerId?: number | null;
+  zoneId?: number | null;
+  serviceZones?: ServiceZone[];
   // Add other user properties as needed
   [key: string]: any;  // Allow additional properties
 };

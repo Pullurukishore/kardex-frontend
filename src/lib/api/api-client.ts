@@ -57,7 +57,7 @@ class ApiClient {
 
   private constructor() {
     this.client = axios.create({
-      baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api',
+      baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5003/api',
       withCredentials: true,
       headers: {
         'Content-Type': 'application/json',
@@ -100,7 +100,10 @@ class ApiClient {
         
         // If error is not 401 or it's a refresh token request, reject
         if (error.response?.status !== 401 || originalRequest._retry) {
-          this.handleError(error);
+          // Check if request wants to skip global error handling
+          if (!originalRequest.headers?.['X-Skip-Global-Error-Handler']) {
+            this.handleError(error);
+          }
           return Promise.reject(error);
         }
 

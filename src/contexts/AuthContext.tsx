@@ -50,6 +50,13 @@ function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
 
+  const coerceOptionalNumber = (value: unknown): number | null | undefined => {
+    if (value === undefined) return undefined;
+    if (value === null) return null;
+    const parsed = typeof value === 'string' ? Number(value) : (value as number);
+    return Number.isNaN(parsed as number) ? undefined : (parsed as number);
+  };
+
   const getRoleBasedRedirect = (role: UserRole): string => {
     switch (role) {
       case UserRole.ADMIN:
@@ -97,6 +104,8 @@ function AuthProvider({ children }: { children: ReactNode }) {
         isActive: userData.isActive ?? true,
         tokenVersion: userData.tokenVersion || '0',
         lastPasswordChange: userData.lastPasswordChange || new Date().toISOString(),
+        zoneId: coerceOptionalNumber((userData as any).zoneId),
+        customerId: coerceOptionalNumber((userData as any).customerId),
       };
 
       setUser(safeUser);
@@ -182,7 +191,8 @@ function AuthProvider({ children }: { children: ReactNode }) {
         // Include any additional user fields that might be needed
         ...(response.user.phone && { phone: response.user.phone }),
         ...(response.user.companyName && { companyName: response.user.companyName }),
-        ...(response.user.zoneId && { zoneId: response.user.zoneId }),
+        ...(response.user.zoneId !== undefined && { zoneId: coerceOptionalNumber((response.user as any).zoneId) }),
+        ...(response.user.customerId !== undefined && { customerId: coerceOptionalNumber((response.user as any).customerId) }),
       };
 
       console.log('Processed user:', safeUser);
@@ -203,7 +213,7 @@ function AuthProvider({ children }: { children: ReactNode }) {
 
       setCookie('accessToken', response.accessToken, {
         ...cookieOptions,
-        maxAge: 60 * 60 * 24, // 1 day for access token (1440 minutes)
+        maxAge: 60 * 15, // 15 minutes to match access token TTL
       });
       
       setCookie('refreshToken', response.refreshToken || '', {
@@ -296,7 +306,15 @@ function AuthProvider({ children }: { children: ReactNode }) {
       setCookie('accessToken', accessToken, { path: '/', secure: process.env.NODE_ENV === 'production', sameSite: 'lax' });
       setCookie('refreshToken', refreshToken, { path: '/', secure: process.env.NODE_ENV === 'production', sameSite: 'lax' });
 
-      setUser(user);
+      const registeredUser: User = {
+        ...user,
+        zoneId: coerceOptionalNumber((user as any).zoneId),
+        customerId: coerceOptionalNumber((user as any).customerId),
+        tokenVersion: user.tokenVersion || '0',
+        name: user.name || user.email?.split('@')[0] || 'User',
+      };
+
+      setUser(registeredUser);
 
       toast.success('Account created successfully!', {
         description: `Welcome to the platform, ${user.name || user.email || 'User'}!`,

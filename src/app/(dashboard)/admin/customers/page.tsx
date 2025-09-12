@@ -28,7 +28,13 @@ import {
   Mail, 
   Globe, 
   AlertCircle,
-  Loader2
+  Loader2,
+  Filter,
+  Download,
+  MoreHorizontal,
+  Users,
+  TrendingUp,
+  Activity
 } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { fetchCustomers, deleteCustomer, type CustomerListResponse } from '@/services/customer.service';
@@ -41,6 +47,21 @@ import {
   DialogDescription, 
   DialogFooter 
 } from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { format } from 'date-fns';
 
 // Status badge styles
@@ -65,8 +86,23 @@ export default function CustomersPage() {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [industryFilter, setIndustryFilter] = useState<string>('all');
+  const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
   const router = useRouter();
   const { toast } = useToast();
+
+  // Calculate stats
+  const stats = {
+    total: customers.length,
+    active: customers.filter(c => c.isActive).length,
+    inactive: customers.filter(c => !c.isActive).length,
+    totalAssets: customers.reduce((sum, c) => sum + (c._count?.assets || 0), 0),
+    totalTickets: customers.reduce((sum, c) => sum + (c._count?.tickets || 0), 0)
+  };
+
+  // Get unique industries for filter
+  const industries = Array.from(new Set(customers.map(c => c.industry).filter(Boolean)));
 
   const loadCustomers = async () => {
     try {
@@ -148,268 +184,461 @@ export default function CustomersPage() {
     }
   };
 
+  // Filter customers based on selected filters
+  const filteredCustomers = customers.filter(customer => {
+    const matchesSearch = search === '' || 
+      customer.companyName.toLowerCase().includes(search.toLowerCase()) ||
+      customer.industry?.toLowerCase().includes(search.toLowerCase()) ||
+      customer.address?.toLowerCase().includes(search.toLowerCase()) ||
+      customer.email?.toLowerCase().includes(search.toLowerCase());
+    
+    const matchesStatus = statusFilter === 'all' || 
+      (statusFilter === 'active' && customer.isActive) ||
+      (statusFilter === 'inactive' && !customer.isActive);
+    
+    const matchesIndustry = industryFilter === 'all' || customer.industry === industryFilter;
+    
+    return matchesSearch && matchesStatus && matchesIndustry;
+  });
+
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col space-y-2 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Customers</h1>
-          <p className="text-muted-foreground">Manage your organization's customers and their assets</p>
+    <div className="container mx-auto py-6 space-y-6">
+      {/* Header with Gradient */}
+      <div className="relative overflow-hidden rounded-lg bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-800 p-6 text-white">
+        <div className="absolute inset-0 bg-black/20"></div>
+        <div className="relative flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold mb-2">Customers</h1>
+            <p className="text-blue-100">
+              Manage your organization's customers and their business relationships
+            </p>
+          </div>
+          <div className="flex items-center space-x-2">
+            <Button 
+              variant="outline"
+              onClick={() => {/* Export functionality */}}
+              className="hidden sm:flex bg-white/10 border-white/20 text-white hover:bg-white/20"
+            >
+              <Download className="mr-2 h-4 w-4" /> Export
+            </Button>
+            <Button 
+              onClick={() => router.push('/admin/customers/new')}
+              className="bg-white text-blue-600 hover:bg-blue-50 shadow-lg"
+            >
+              <Plus className="mr-2 h-4 w-4" /> Add Customer
+            </Button>
+          </div>
         </div>
-        <Button 
-          onClick={() => router.push('/admin/customers/new')}
-          className="w-full sm:w-auto"
-        >
-          <Plus className="mr-2 h-4 w-4" /> Add Customer
-        </Button>
       </div>
 
-      <Card className="border-0 shadow-sm">
-        <CardHeader className="pb-2">
-          <div className="flex flex-col space-y-2 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
-            <div className="w-full sm:max-w-sm">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  type="search"
-                  placeholder="Search by name, industry, or contact..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="w-full pl-9"
-                />
+      {/* Enhanced Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+        <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-blue-600">Total Customers</p>
+                <p className="text-2xl font-bold text-blue-900">{stats.total}</p>
+              </div>
+              <div className="h-12 w-12 rounded-full bg-blue-500 flex items-center justify-center">
+                <Building2 className="h-6 w-6 text-white" />
               </div>
             </div>
-            <div className="text-sm text-muted-foreground">
-              {!loading && customers.length > 0 && (
+          </CardContent>
+        </Card>
+        
+        <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-green-600">Active</p>
+                <p className="text-2xl font-bold text-green-900">{stats.active}</p>
+              </div>
+              <div className="h-12 w-12 rounded-full bg-green-500 flex items-center justify-center">
+                <Activity className="h-6 w-6 text-white" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card className="bg-gradient-to-br from-gray-50 to-gray-100 border-gray-200">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Inactive</p>
+                <p className="text-2xl font-bold text-gray-900">{stats.inactive}</p>
+              </div>
+              <div className="h-12 w-12 rounded-full bg-gray-500 flex items-center justify-center">
+                <Users className="h-6 w-6 text-white" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-purple-600">Total Assets</p>
+                <p className="text-2xl font-bold text-purple-900">{stats.totalAssets}</p>
+              </div>
+              <div className="h-12 w-12 rounded-full bg-purple-500 flex items-center justify-center">
+                <TrendingUp className="h-6 w-6 text-white" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-orange-600">Total Tickets</p>
+                <p className="text-2xl font-bold text-orange-900">{stats.totalTickets}</p>
+              </div>
+              <div className="h-12 w-12 rounded-full bg-orange-500 flex items-center justify-center">
+                <AlertCircle className="h-6 w-6 text-white" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Enhanced Filters and Search */}
+      <Card className="shadow-lg">
+        <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100 rounded-t-lg">
+          <CardTitle className="text-gray-800">Search & Filter</CardTitle>
+        </CardHeader>
+        <CardContent className="pt-6">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 flex-1">
+              <div className="relative flex-1 sm:max-w-sm">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                <Input
+                  type="search"
+                  placeholder="Search customers..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full pl-10 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-full sm:w-[140px]">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="inactive">Inactive</SelectItem>
+                </SelectContent>
+              </Select>
+              
+              <Select value={industryFilter} onValueChange={setIndustryFilter}>
+                <SelectTrigger className="w-full sm:w-[160px]">
+                  <SelectValue placeholder="Industry" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Industries</SelectItem>
+                  {industries.map(industry => (
+                    <SelectItem key={industry} value={industry}>{industry}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="text-sm text-gray-600">
+              {!loading && filteredCustomers.length > 0 && (
                 <span>
-                  Showing <span className="font-medium">{(page - 1) * 10 + 1}</span> to{' '}
-                  <span className="font-medium">
-                    {Math.min(page * 10, (page - 1) * 10 + customers.length)}
-                  </span>{' '}
-                  of <span className="font-medium">{totalCount}</span> customers
+                  Showing <span className="font-semibold">{filteredCustomers.length}</span> of{' '}
+                  <span className="font-semibold">{customers.length}</span> customers
                 </span>
               )}
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Enhanced Customers Table */}
+      <Card className="shadow-lg">
+        <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-t-lg">
+          <CardTitle className="text-gray-800 flex items-center gap-2">
+            <Building2 className="h-5 w-5 text-blue-600" />
+            Customers ({filteredCustomers.length})
+          </CardTitle>
+          <CardDescription>
+            Manage customer relationships and business data
+          </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
-          <div className="relative overflow-x-auto">
-            <Table>
-              <TableHeader className="bg-muted/50">
-                <TableRow>
-                  <TableHead className="min-w-[200px]">Company</TableHead>
-                  <TableHead>Industry</TableHead>
-                  <TableHead>Location</TableHead>
-                  <TableHead>Contact</TableHead>
-                  <TableHead className="text-center">Assets</TableHead>
-                  <TableHead className="text-center">Contacts</TableHead>
-                  <TableHead className="text-center">Tickets</TableHead>
-                  <TableHead className="text-center">Status</TableHead>
-                  <TableHead className="w-[120px] text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loading ? (
-                  <TableRow>
-                    <TableCell colSpan={9} className="h-64 text-center">
-                      <div className="flex flex-col items-center justify-center space-y-2">
-                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                        <p className="text-muted-foreground">Loading customers...</p>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ) : error ? (
-                  <TableRow>
-                    <TableCell colSpan={9} className="h-64 text-center">
-                      <div className="flex flex-col items-center justify-center space-y-2 text-destructive">
-                        <AlertCircle className="h-8 w-8" />
-                        <p>{error}</p>
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          onClick={loadCustomers}
-                          className="mt-2"
-                        >
-                          Retry
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ) : !customers?.length ? (
-                  <TableRow>
-                    <TableCell colSpan={9} className="h-64 text-center">
-                      <div className="flex flex-col items-center justify-center space-y-2">
-                        <Building2 className="h-8 w-8 text-muted-foreground" />
-                        <p className="text-muted-foreground">No customers found</p>
-                        {search && (
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            onClick={() => setSearch('')}
-                          >
-                            Clear search
-                          </Button>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  customers.map((customer) => (
-                    <TableRow key={customer.id} className="group hover:bg-muted/50">
-                      <TableCell className="font-medium">
-                        <div className="flex items-center space-x-3">
-                          <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary/10">
-                            <Building2 className="h-5 w-5 text-primary" />
+          {loading ? (
+            <div className="text-center py-12">
+              <div className="flex items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-500 mr-2" />
+                Loading customers...
+              </div>
+            </div>
+          ) : error ? (
+            <div className="text-center py-12">
+              <div className="mx-auto h-24 w-24 rounded-full bg-gradient-to-br from-red-100 to-red-100 flex items-center justify-center mb-4">
+                <AlertCircle className="h-12 w-12 text-red-500" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Error loading customers</h3>
+              <p className="text-gray-500 mb-6">{error}</p>
+              <Button 
+                variant="outline" 
+                onClick={loadCustomers}
+                className="hover:bg-blue-50 hover:border-blue-300"
+              >
+                Retry
+              </Button>
+            </div>
+          ) : !filteredCustomers.length ? (
+            <div className="text-center py-12">
+              <div className="mx-auto h-24 w-24 rounded-full bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center mb-4">
+                <Building2 className="h-12 w-12 text-blue-500" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">No customers found</h3>
+              <p className="text-gray-500 mb-6">
+                {search ? 'Try adjusting your search criteria.' : 'Get started by adding your first customer.'}
+              </p>
+              {search ? (
+                <Button 
+                  variant="ghost" 
+                  onClick={() => setSearch('')}
+                  className="hover:bg-blue-50"
+                >
+                  Clear search
+                </Button>
+              ) : (
+                <Button 
+                  onClick={() => router.push('/admin/customers/new')}
+                  className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg"
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Customer
+                </Button>
+              )}
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="text-left py-4 px-6 font-semibold text-gray-700 min-w-[200px]">Company</th>
+                    <th className="text-left py-4 px-6 font-semibold text-gray-700">Industry & Location</th>
+                    <th className="text-left py-4 px-6 font-semibold text-gray-700">Contact</th>
+                    <th className="text-center py-4 px-6 font-semibold text-gray-700">Assets</th>
+                    <th className="text-center py-4 px-6 font-semibold text-gray-700">Tickets</th>
+                    <th className="text-center py-4 px-6 font-semibold text-gray-700">Status</th>
+                    <th className="text-right py-4 px-6 font-semibold text-gray-700">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {filteredCustomers.map((customer) => (
+                    <tr key={customer.id} className="hover:bg-gradient-to-r hover:from-blue-50/50 hover:to-indigo-50/50 transition-all duration-200">
+                      <td className="py-4 px-6">
+                        <div className="flex items-center gap-3">
+                          <div className="h-12 w-12 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-semibold">
+                            {customer.companyName.charAt(0).toUpperCase()}
                           </div>
                           <div>
                             <button 
                               onClick={() => router.push(`/admin/customers/${customer.id}`)}
-                              className="font-medium hover:underline text-left"
+                              className="font-semibold text-gray-900 hover:text-blue-600 transition-colors text-left"
                             >
                               {customer.companyName}
                             </button>
                             {customer.serviceZone?.name && (
-                              <div className="text-xs text-muted-foreground">
+                              <div className="text-sm text-gray-500 flex items-center mt-1">
+                                <MapPin className="h-3 w-3 mr-1" />
                                 {customer.serviceZone.name}
                               </div>
                             )}
                           </div>
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-sm text-muted-foreground">
-                          {customer.industry || 'N/A'}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center space-x-1 text-sm">
-                          <MapPin className="h-4 w-4 text-muted-foreground" />
-                          <span>
-                            {customer.city}, {customer.state}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
+                      </td>
+                      <td className="py-4 px-6">
                         <div className="space-y-1">
-                          {customer.contacts?.[0]?.name && (
-                            <div className="font-medium">{customer.contacts[0].name}</div>
+                          {customer.industry ? (
+                            <Badge variant="secondary" className="bg-indigo-100 text-indigo-700 hover:bg-indigo-200">
+                              {customer.industry}
+                            </Badge>
+                          ) : (
+                            <span className="text-sm text-gray-400">No industry</span>
                           )}
-                          {customer.contacts?.[0]?.email && (
-                            <div className="flex items-center space-x-1 text-sm text-muted-foreground">
-                              <Mail className="h-3.5 w-3.5 flex-shrink-0" />
-                              <a 
-                                href={`mailto:${customer.contacts[0].email}`} 
-                                className="hover:underline truncate"
-                                onClick={(e) => e.stopPropagation()}
-                                title={customer.contacts[0].email}
-                              >
-                                {customer.contacts[0].email}
-                              </a>
-                            </div>
-                          )}
-                          {customer.contacts?.[0]?.phone && (
-                            <div className="flex items-center space-x-1 text-sm text-muted-foreground">
-                              <Phone className="h-3.5 w-3.5 flex-shrink-0" />
-                              <a 
-                                href={`tel:${customer.contacts[0].phone}`}
-                                className="hover:underline"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                {customer.contacts[0].phone}
-                              </a>
+                          <div className="flex items-center text-sm text-gray-500">
+                            <MapPin className="h-4 w-4 mr-1" />
+                            {customer.address || 'No address'}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-4 px-6">
+                        <div className="space-y-1">
+                          {customer.contacts && customer.contacts.length > 0 ? (
+                            <>
+                              {customer.contacts[0]?.name && (
+                                <div className="font-medium text-gray-900">{customer.contacts[0].name}</div>
+                              )}
+                              {customer.contacts[0]?.email && (
+                                <div className="flex items-center text-sm text-gray-500">
+                                  <Mail className="h-3.5 w-3.5 mr-1 flex-shrink-0" />
+                                  <a 
+                                    href={`mailto:${customer.contacts[0].email}`} 
+                                    className="hover:underline truncate hover:text-blue-600"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    {customer.contacts[0].email}
+                                  </a>
+                                </div>
+                              )}
+                              {customer.contacts[0]?.phone && (
+                                <div className="flex items-center text-sm text-gray-500">
+                                  <Phone className="h-3.5 w-3.5 mr-1 flex-shrink-0" />
+                                  <a 
+                                    href={`tel:${customer.contacts[0].phone}`}
+                                    className="hover:underline hover:text-blue-600"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    {customer.contacts[0].phone}
+                                  </a>
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            <div className="text-sm text-gray-400 flex items-center">
+                              <Users className="h-3.5 w-3.5 mr-1" />
+                              {customer._count?.contacts ? `${customer._count.contacts} contacts` : 'No contacts'}
                             </div>
                           )}
                         </div>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Badge variant="outline" className="min-w-[2rem]">
+                      </td>
+                      <td className="py-4 px-6 text-center">
+                        <Badge 
+                          variant="outline" 
+                          className="bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100"
+                        >
                           {customer._count?.assets || 0}
                         </Badge>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Badge variant="outline" className="min-w-[2rem]">
-                          {customer._count?.contacts || 0}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Badge variant="outline" className="min-w-[2rem]">
+                      </td>
+                      <td className="py-4 px-6 text-center">
+                        <Badge 
+                          variant="outline" 
+                          className="bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100"
+                        >
                           {customer._count?.tickets || 0}
                         </Badge>
-                      </TableCell>
-                      <TableCell className="text-center">
+                      </td>
+                      <td className="py-4 px-6 text-center">
                         <Badge 
-                        className={getStatusBadgeStyles(customer.isActive)}
-                        variant="outline"
-                      >
-                        {customer.isActive ? 'active' : 'inactive'}
-                      </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end space-x-1 opacity-0 group-hover:opacity-100">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => router.push(`/admin/customers/${customer.id}`)}
-                            title="View details"
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              router.push(`/admin/customers/${customer.id}/edit`);
-                            }}
-                            title="Edit customer"
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-destructive hover:text-destructive"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedCustomer(customer);
-                              setIsDeleteDialogOpen(true);
-                            }}
-                            title="Delete customer"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
+                          className={cn(
+                            'capitalize font-medium',
+                            customer.isActive 
+                              ? 'bg-green-100 text-green-800 border-green-200 hover:bg-green-200' 
+                              : 'bg-gray-100 text-gray-800 border-gray-200 hover:bg-gray-200'
+                          )}
+                          variant="outline"
+                        >
+                          {customer.isActive ? 'Active' : 'Inactive'}
+                        </Badge>
+                      </td>
+                      <td className="py-4 px-6 text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="hover:bg-blue-50"
+                            >
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-48">
+                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() => router.push(`/admin/customers/${customer.id}`)}
+                              className="cursor-pointer"
+                            >
+                              <Eye className="mr-2 h-4 w-4 text-blue-500" />
+                              View Details
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => router.push(`/admin/customers/${customer.id}/edit`)}
+                              className="cursor-pointer"
+                            >
+                              <Edit className="mr-2 h-4 w-4 text-green-500" />
+                              Edit Customer
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setSelectedCustomer(customer);
+                                setIsDeleteDialogOpen(true);
+                              }}
+                              className="cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50"
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Delete Customer
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
           
+          {/* Enhanced Pagination */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-between px-6 py-4 border-t">
-              <div className="text-sm text-muted-foreground">
-                Page {page} of {totalPages}
-              </div>
-              <div className="flex space-x-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPage(p => Math.max(1, p - 1))}
-                  disabled={page === 1 || loading}
-                >
-                  Previous
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                  disabled={page === totalPages || loading}
-                >
-                  Next
-                </Button>
+            <div className="border-t bg-gray-50 px-6 py-4">
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-gray-600">
+                  Showing page <span className="font-semibold">{page}</span> of{' '}
+                  <span className="font-semibold">{totalPages}</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                    disabled={page === 1 || loading}
+                    className="hover:bg-blue-50 hover:border-blue-300 disabled:opacity-50"
+                  >
+                    Previous
+                  </Button>
+                  <div className="flex items-center space-x-1">
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      const pageNum = i + 1;
+                      return (
+                        <Button
+                          key={pageNum}
+                          variant={page === pageNum ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setPage(pageNum)}
+                          className={
+                            page === pageNum
+                              ? "bg-blue-600 hover:bg-blue-700"
+                              : "hover:bg-blue-50 hover:border-blue-300"
+                          }
+                        >
+                          {pageNum}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                    disabled={page === totalPages || loading}
+                    className="hover:bg-blue-50 hover:border-blue-300 disabled:opacity-50"
+                  >
+                    Next
+                  </Button>
+                </div>
               </div>
             </div>
           )}

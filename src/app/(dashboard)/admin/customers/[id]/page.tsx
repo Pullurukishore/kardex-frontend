@@ -20,7 +20,13 @@ import {
   AlertCircle,
   Loader2,
   Trash2,
-  Plus
+  Plus,
+  Globe,
+  Clock,
+  Activity,
+  TrendingUp,
+  MoreHorizontal,
+  ExternalLink
 } from 'lucide-react';
 import { fetchCustomer, deleteCustomer } from '@/services/customer.service';
 import { useToast } from '@/components/ui/use-toast';
@@ -123,14 +129,23 @@ export default function CustomerDetailPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <Button variant="ghost" onClick={() => router.back()}>
-          <ArrowLeft className="mr-2 h-4 w-4" /> Back to Customers
-        </Button>
-        <div className="space-x-2">
+      <div className="flex flex-col space-y-4 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
+        <div className="flex items-center space-x-4">
+          <Button variant="ghost" onClick={() => router.back()} className="p-2">
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">{customer.companyName}</h1>
+            <p className="text-sm text-muted-foreground">
+              Customer Details • ID: {customer.id}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center space-x-2">
           <Button 
             variant="outline" 
             onClick={() => router.push(`/admin/customers/${id}/edit`)}
+            className="bg-white hover:bg-gray-50"
           >
             <Edit className="mr-2 h-4 w-4" /> Edit
           </Button>
@@ -138,6 +153,7 @@ export default function CustomerDetailPage() {
             variant="destructive" 
             onClick={handleDelete}
             disabled={deleting}
+            className="bg-red-600 hover:bg-red-700"
           >
             {deleting ? (
               <>
@@ -154,116 +170,141 @@ export default function CustomerDetailPage() {
         </div>
       </div>
 
+      <div className={`rounded-lg border p-4 ${customer.isActive ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'}`}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <div className={`p-2 rounded-full ${customer.isActive ? 'bg-green-100' : 'bg-gray-100'}`}>
+              <Activity className={`h-5 w-5 ${customer.isActive ? 'text-green-600' : 'text-gray-600'}`} />
+            </div>
+            <div>
+              <h3 className="font-medium text-gray-900">
+                Customer Status: {customer.isActive ? 'Active' : 'Inactive'}
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                {customer.isActive ? 'This customer is currently active and receiving services' : 'This customer is inactive'}
+              </p>
+            </div>
+          </div>
+          <Badge 
+            className={`${customer.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'} font-medium`}
+            variant="outline"
+          >
+            {customer.isActive ? 'Active' : 'Inactive'}
+          </Badge>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main Customer Info */}
         <div className="lg:col-span-2 space-y-6">
-          <Card>
-            <CardHeader className="border-b">
+          <Card className="border-0 shadow-lg">
+            <CardHeader className="border-b bg-gradient-to-r from-blue-50 to-indigo-50">
               <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="p-2 rounded-lg bg-primary/10">
-                    <Building2 className="h-6 w-6 text-primary" />
+                <div className="flex items-center space-x-4">
+                  <div className="p-3 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 shadow-sm">
+                    <Building2 className="h-8 w-8 text-white" />
                   </div>
                   <div>
-                    <CardTitle>{customer.companyName}</CardTitle>
-                    <CardDescription className="mt-1">
+                    <CardTitle className="text-xl text-gray-900">{customer.companyName}</CardTitle>
+                    <CardDescription className="mt-1 flex items-center text-base">
+                      <MapPin className="h-4 w-4 mr-1" />
                       {customer.serviceZone?.name || 'No service zone assigned'}
                     </CardDescription>
                   </div>
                 </div>
-                <Badge 
-                  className={`${getStatusBadgeStyles(customer.isActive)} capitalize`}
-                  variant="outline"
-                >
-                  {customer.isActive ? 'Active' : 'Inactive'}
-                </Badge>
               </div>
             </CardHeader>
             <CardContent className="pt-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-4">
-                  <div>
-                    <h3 className="text-sm font-medium text-muted-foreground mb-1">
-                      <MapPin className="inline-block h-4 w-4 mr-1" />
-                      Address
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-6">
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
+                      <MapPin className="h-4 w-4 mr-2 text-blue-600" />
+                      Address Information
                     </h3>
-                    <p className="text-sm">
-                      {customer.address || 'N/A'}<br />
-                      {customer.city}, {customer.state} {customer.postalCode}<br />
-                      {customer.country}
-                    </p>
+                    <div className="space-y-2 text-sm text-gray-600">
+                      <p className="font-medium text-gray-900">{customer.address || 'N/A'}</p>
+                      <p>{customer.city}, {customer.state} {customer.postalCode}</p>
+                      <p>{customer.country}</p>
+                    </div>
                   </div>
                   
-                  <div>
-                    <h3 className="text-sm font-medium text-muted-foreground mb-1">
-                      <Phone className="inline-block h-4 w-4 mr-1" />
-                      Contact
+                  <div className="bg-blue-50 rounded-lg p-4">
+                    <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
+                      <Phone className="h-4 w-4 mr-2 text-blue-600" />
+                      Contact Information
                     </h3>
-                    <div className="space-y-1">
-                      <p className="text-sm">
+                    <div className="space-y-3">
+                      <div className="flex items-center space-x-2">
+                        <Phone className="h-4 w-4 text-gray-400" />
                         <a 
                           href={`tel:${customer.phone}`} 
-                          className="hover:underline hover:text-primary"
+                          className="text-sm text-blue-600 hover:text-blue-800 hover:underline font-medium"
                         >
                           {customer.phone || 'N/A'}
                         </a>
-                      </p>
-                      <p className="text-sm">
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Mail className="h-4 w-4 text-gray-400" />
                         <a 
                           href={`mailto:${customer.email}`} 
-                          className="hover:underline hover:text-primary"
+                          className="text-sm text-blue-600 hover:text-blue-800 hover:underline font-medium"
                         >
                           {customer.email}
                         </a>
-                      </p>
+                      </div>
                       {customer.website && (
-                        <p className="text-sm">
+                        <div className="flex items-center space-x-2">
+                          <Globe className="h-4 w-4 text-gray-400" />
                           <a 
                             href={customer.website.startsWith('http') ? customer.website : `https://${customer.website}`} 
                             target="_blank" 
                             rel="noopener noreferrer"
-                            className="hover:underline hover:text-primary"
+                            className="text-sm text-blue-600 hover:text-blue-800 hover:underline font-medium flex items-center"
                           >
                             {customer.website}
+                            <ExternalLink className="h-3 w-3 ml-1" />
                           </a>
-                        </p>
+                        </div>
                       )}
                     </div>
                   </div>
                 </div>
 
-                <div className="space-y-4">
-                  <div>
-                    <h3 className="text-sm font-medium text-muted-foreground mb-1">
-                      <Calendar className="inline-block h-4 w-4 mr-1" />
-                      Additional Information
+                <div className="space-y-6">
+                  <div className="bg-green-50 rounded-lg p-4">
+                    <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
+                      <Calendar className="h-4 w-4 mr-2 text-green-600" />
+                      Business Information
                     </h3>
-                    <div className="space-y-1 text-sm">
-                      <p>
-                        <span className="text-muted-foreground">Industry:</span>{' '}
-                        {customer.industry || 'N/A'}
-                      </p>
-                      <p>
-                        <span className="text-muted-foreground">Tax ID:</span>{' '}
-                        {customer.taxId || 'N/A'}
-                      </p>
-                      <p>
-                        <span className="text-muted-foreground">Created:</span>{' '}
-                        {format(new Date(customer.createdAt), 'PPpp')}
-                      </p>
-                      <p>
-                        <span className="text-muted-foreground">Last Updated:</span>{' '}
-                        {format(new Date(customer.updatedAt), 'PPpp')}
-                      </p>
+                    <div className="space-y-3 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Industry:</span>
+                        <Badge variant="secondary" className="bg-green-100 text-green-800">
+                          {customer.industry || 'N/A'}
+                        </Badge>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Tax ID:</span>
+                        <span className="font-medium text-gray-900">{customer.taxId || 'N/A'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Created:</span>
+                        <span className="font-medium text-gray-900">{format(new Date(customer.createdAt), 'MMM dd, yyyy')}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Last Updated:</span>
+                        <span className="font-medium text-gray-900">{format(new Date(customer.updatedAt), 'MMM dd, yyyy')}</span>
+                      </div>
                     </div>
                   </div>
 
                   {customer.notes && (
-                    <div>
-                      <h3 className="text-sm font-medium text-muted-foreground mb-1">
+                    <div className="bg-yellow-50 rounded-lg p-4">
+                      <h3 className="text-sm font-semibold text-gray-700 mb-2">
                         Notes
                       </h3>
-                      <p className="text-sm bg-muted/50 p-3 rounded-md">
+                      <p className="text-sm text-gray-700 leading-relaxed">
                         {customer.notes}
                       </p>
                     </div>
@@ -274,24 +315,24 @@ export default function CustomerDetailPage() {
           </Card>
 
           {/* Contacts Section */}
-          <Card>
-            <CardHeader className="border-b">
+          <Card className="border-0 shadow-lg">
+            <CardHeader className="border-b bg-gradient-to-r from-green-50 to-emerald-50">
               <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center">
-                  <Users className="h-5 w-5 mr-2 text-muted-foreground" />
+                <CardTitle className="flex items-center text-lg">
+                  <Users className="h-5 w-5 mr-2 text-green-600" />
                   Contacts
                 </CardTitle>
                 <div className="flex items-center space-x-2">
-                  <Badge variant="outline">
+                  <Badge className="bg-green-100 text-green-800">
                     {customer._count.contacts} contact{customer._count.contacts !== 1 ? 's' : ''}
                   </Badge>
                   <Button 
                     size="sm" 
-                    variant="outline"
+                    className="bg-green-600 hover:bg-green-700 text-white"
                     onClick={() => router.push(`/admin/customers/${customer.id}/contacts/new`)}
                   >
                     <Plus className="h-4 w-4 mr-1" />
-                    Add Contact
+                    Add
                   </Button>
                 </div>
               </div>
@@ -354,52 +395,86 @@ export default function CustomerDetailPage() {
         {/* Sidebar */}
         <div className="space-y-6">
           {/* Quick Stats */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Quick Stats</CardTitle>
+          <Card className="border-0 shadow-lg">
+            <CardHeader className="bg-gradient-to-r from-purple-50 to-pink-50">
+              <CardTitle className="text-lg flex items-center">
+                <TrendingUp className="h-5 w-5 mr-2 text-purple-600" />
+                Quick Stats
+              </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <HardDrive className="h-5 w-5 text-muted-foreground" />
-                  <span className="text-sm font-medium">Assets</span>
+            <CardContent className="space-y-4 pt-6">
+              <div className="bg-blue-50 rounded-lg p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className="p-2 bg-blue-100 rounded-lg">
+                      <HardDrive className="h-5 w-5 text-blue-600" />
+                    </div>
+                    <div>
+                      <span className="text-sm font-medium text-gray-900">Assets</span>
+                      <p className="text-xs text-gray-600">Total equipment</p>
+                    </div>
+                  </div>
+                  <Badge className="bg-blue-100 text-blue-800 text-lg font-bold px-3 py-1">
+                    {customer._count.assets}
+                  </Badge>
                 </div>
-                <Badge variant="outline">
-                  {customer._count.assets}
-                </Badge>
               </div>
               
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <Ticket className="h-5 w-5 text-muted-foreground" />
-                  <span className="text-sm font-medium">Tickets</span>
+              <div className="bg-orange-50 rounded-lg p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className="p-2 bg-orange-100 rounded-lg">
+                      <Ticket className="h-5 w-5 text-orange-600" />
+                    </div>
+                    <div>
+                      <span className="text-sm font-medium text-gray-900">Tickets</span>
+                      <p className="text-xs text-gray-600">Support requests</p>
+                    </div>
+                  </div>
+                  <Badge className="bg-orange-100 text-orange-800 text-lg font-bold px-3 py-1">
+                    {customer._count.tickets}
+                  </Badge>
                 </div>
-                <Badge variant="outline">
-                  {customer._count.tickets}
-                </Badge>
+              </div>
+              
+              <div className="bg-green-50 rounded-lg p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className="p-2 bg-green-100 rounded-lg">
+                      <Users className="h-5 w-5 text-green-600" />
+                    </div>
+                    <div>
+                      <span className="text-sm font-medium text-gray-900">Contacts</span>
+                      <p className="text-xs text-gray-600">People</p>
+                    </div>
+                  </div>
+                  <Badge className="bg-green-100 text-green-800 text-lg font-bold px-3 py-1">
+                    {customer._count.contacts}
+                  </Badge>
+                </div>
               </div>
             </CardContent>
           </Card>
 
           {/* Assets Section */}
-          <Card>
-            <CardHeader className="border-b">
+          <Card className="border-0 shadow-lg">
+            <CardHeader className="border-b bg-gradient-to-r from-blue-50 to-cyan-50">
               <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center">
-                  <HardDrive className="h-5 w-5 mr-2 text-muted-foreground" />
+                <CardTitle className="flex items-center text-lg">
+                  <HardDrive className="h-5 w-5 mr-2 text-blue-600" />
                   Assets
                 </CardTitle>
                 <div className="flex items-center space-x-2">
-                  <Badge variant="outline">
+                  <Badge className="bg-blue-100 text-blue-800">
                     {customer._count.assets} asset{customer._count.assets !== 1 ? 's' : ''}
                   </Badge>
                   <Button 
                     size="sm" 
-                    variant="outline"
+                    className="bg-blue-600 hover:bg-blue-700 text-white"
                     onClick={() => router.push(`/admin/customers/${customer.id}/assets/new`)}
                   >
                     <Plus className="h-4 w-4 mr-1" />
-                    Add Asset
+                    Add
                   </Button>
                 </div>
               </div>
@@ -411,14 +486,19 @@ export default function CustomerDetailPage() {
                     <Link 
                       key={asset.id} 
                       href={`/admin/assets/${asset.id}`}
-                      className="block border rounded-lg p-3 hover:bg-accent transition-colors"
+                      className="block border border-gray-200 rounded-lg p-4 hover:bg-blue-50 hover:border-blue-300 transition-all duration-200 shadow-sm"
                     >
                       <div className="flex justify-between items-start">
-                        <div>
-                          <p className="font-medium">{asset.machineId}</p>
-                          <p className="text-sm text-muted-foreground">{asset.model}</p>
+                        <div className="flex items-center space-x-3">
+                          <div className="p-2 bg-blue-100 rounded-lg">
+                            <HardDrive className="h-4 w-4 text-blue-600" />
+                          </div>
+                          <div>
+                            <p className="font-semibold text-gray-900">{asset.machineId}</p>
+                            <p className="text-sm text-gray-600">{asset.model}</p>
+                          </div>
                         </div>
-                        <Badge variant="outline">
+                        <Badge className="bg-gray-100 text-gray-800">
                           {asset.status}
                         </Badge>
                       </div>
@@ -442,9 +522,8 @@ export default function CustomerDetailPage() {
                     Add assets to this customer to track their equipment.
                   </p>
                   <Button 
-                    variant="outline" 
+                    className="mt-4 bg-blue-600 hover:bg-blue-700 text-white" 
                     size="sm" 
-                    className="mt-4"
                     onClick={() => router.push(`/admin/customers/${customer.id}/assets/new`)}
                   >
                     <Plus className="h-4 w-4 mr-1" />

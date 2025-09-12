@@ -31,7 +31,11 @@ import {
   X,
   Calendar,
   Ticket,
+  Zap,
+  Activity,
+  Sparkles,
 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 
 type NavItem = {
   title: string;
@@ -52,21 +56,19 @@ const navigation: NavItem[] = [
   { title: "Service Persons", href: "/admin/service-person", icon: Users, roles: [UserRole.ADMIN] },
   { title: "Service Zones", href: "/admin/service-zones", icon: MapPin, roles: [UserRole.ADMIN] },
   { title: "Zone Users", href: "/admin/zone-users", icon: Users, roles: [UserRole.ADMIN] },
-  { title: "Assets", href: "/admin/assets", icon: Box, roles: [UserRole.ADMIN] },
   { title: "Tickets", href: "/admin/tickets", icon: ClipboardList, roles: [UserRole.ADMIN] },
   { title: "Reports", href: "/admin/reports", icon: FileText, roles: [UserRole.ADMIN] },
 
   // Service Person
   { title: "Dashboard", href: "/service-person/dashboard", icon: LayoutDashboard, roles: [UserRole.SERVICE_PERSON] },
   { title: "Assigned Tickets", href: "/service-person/tickets", icon: ClipboardList, roles: [UserRole.SERVICE_PERSON] },
-  { title: "Schedule", href: "/service-person/schedule", icon: Calendar, roles: [UserRole.SERVICE_PERSON] },
 
   // Zone User
   { title: "Dashboard", href: "/zone/dashboard", icon: LayoutDashboard, roles: [UserRole.ZONE_USER] },
   { title: "Field Analytics", href: "/zone/FSA", icon: BarChart2, roles: [UserRole.ZONE_USER] },
-  { title: "Assets", href: "/zone/assets", icon: Box, roles: [UserRole.ZONE_USER] },
+  { title: "Service Persons", href: "/zone/service-persons", icon: MapPin, roles: [UserRole.ZONE_USER] },
+  { title: "Customers", href: "/zone/customers", icon: Users, roles: [UserRole.ZONE_USER] },
   { title: "Tickets", href: "/zone/tickets", icon: ClipboardList, roles: [UserRole.ZONE_USER] },
-  { title: "Complaints", href: "/zone/complaints", icon: AlertCircle, roles: [UserRole.ZONE_USER] },
   { title: "Reports", href: "/zone/reports", icon: FileText, roles: [UserRole.ZONE_USER] },
 ];
 
@@ -86,6 +88,8 @@ export function Sidebar({
   setCollapsed,
 }: SidebarProps): JSX.Element {
   const pathname = usePathname();
+  const [hoveredItem, setHoveredItem] = React.useState<string | null>(null);
+  const [pendingHref, setPendingHref] = React.useState<string | null>(null);
 
   // Memoize the filtered navigation items based on user role
   const filteredNavItems = React.useMemo(() => 
@@ -99,16 +103,24 @@ export function Sidebar({
       e.preventDefault();
       return;
     }
+    // Optimistically mark as active for immediate visual feedback
+    setPendingHref(item.href);
     // Use requestAnimationFrame for smoother transitions
     requestAnimationFrame(() => {
       onClose?.();
     });
   }, [onClose]);
 
-  // Memoize the renderNavItem function with proper dependencies
+  // Clear pending state after navigation completes
+  React.useEffect(() => {
+    setPendingHref(null);
+  }, [pathname]);
+
+  // Enhanced renderNavItem function with animations
   const renderNavItem = React.useCallback((item: NavItem) => {
-    const isActive = pathname?.startsWith(item.href) ?? false;
+    const isActive = (pathname?.startsWith(item.href) ?? false) || pendingHref === item.href;
     const Icon = item.icon;
+    const isHovered = hoveredItem === item.href;
     
     // Skip rendering if the item is disabled
     if (item.disabled) {
@@ -116,58 +128,118 @@ export function Sidebar({
     }
 
     return (
-      <Link
+      <motion.div
         key={item.href}
-        href={item.disabled ? "#" : item.href}
-        onClick={(e) => handleItemClick(e, item)}
-        prefetch={false}
-        replace={isActive}
-        shallow={true} // Prevents full page reloads
-        scroll={false} // Disables automatic scrolling
-        className={cn(
-          "group relative flex items-center rounded-lg px-3 py-2.5 text-sm font-medium",
-          isActive
-            ? "bg-slate-800 text-white"
-            : "text-slate-300 hover:bg-slate-800/80 hover:text-white",
-          item.disabled && "cursor-not-allowed opacity-60"
-        )}
+        initial={{ opacity: 0, x: -15 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.2, ease: "easeOut" }}
+        onHoverStart={() => setHoveredItem(item.href)}
+        onHoverEnd={() => setHoveredItem(null)}
       >
-        {/* Active indicator - simplified */}
-        {isActive && (
-          <div className="absolute left-0 top-1/2 h-6 w-0.5 -translate-y-1/2 bg-white rounded-r" />
-        )}
-        
-        <div className="flex h-8 w-8 items-center justify-center rounded">
-          <Icon
-            className={cn(
-              "h-5 w-5 flex-shrink-0",
-              isActive ? "text-white" : "text-slate-400 group-hover:text-white"
+        <Link
+          href={item.disabled ? "#" : item.href}
+          onClick={(e) => handleItemClick(e, item)}
+          prefetch={true}
+          replace={isActive}
+          shallow={true}
+          scroll={false}
+          aria-current={isActive ? 'page' : undefined}
+          className={cn(
+            "group relative flex items-center rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200 overflow-hidden",
+            isActive
+              ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md"
+              : "text-slate-600 hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 hover:text-slate-800",
+            item.disabled && "cursor-not-allowed opacity-60"
+          )}
+        >
+          {/* Enhanced active indicator */}
+          <AnimatePresence>
+            {isActive && (
+              <motion.div
+                initial={{ scaleY: 0, opacity: 0 }}
+                animate={{ scaleY: 1, opacity: 1 }}
+                exit={{ scaleY: 0, opacity: 0 }}
+                transition={{ duration: 0.3, ease: "easeOut" }}
+                className="absolute left-0 top-1/2 h-6 w-1 -translate-y-1/2 bg-white rounded-r-full shadow-sm"
+              />
             )}
+          </AnimatePresence>
+          
+          {/* Hover effect background */}
+          <motion.div
+            className="absolute inset-0 bg-gradient-to-r from-blue-600/10 to-indigo-600/10 rounded-lg"
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ 
+              opacity: isHovered && !isActive ? 1 : 0, 
+              scale: isHovered && !isActive ? 1 : 0.8 
+            }}
+            transition={{ duration: 0.2 }}
           />
-        </div>
-        
-        {!collapsed && (
-          <div className="ml-3 flex flex-1 items-center justify-between">
-            <span className="truncate">{item.title}</span>
-            {item.badge && (
-              <span className="ml-2 rounded-full bg-pink-600 px-2 py-0.5 text-xs font-bold text-white">
-                {item.badge}
-              </span>
+          
+          <motion.div 
+            className="flex h-9 w-9 items-center justify-center rounded-lg relative z-10"
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.98 }}
+            transition={{ type: "spring", stiffness: 300, damping: 15 }}
+          >
+            <Icon
+              className={cn(
+                "h-5 w-5 flex-shrink-0 transition-all duration-200",
+                isActive 
+                  ? "text-white drop-shadow-sm" 
+                  : "text-slate-500 group-hover:text-slate-700"
+              )}
+            />
+          </motion.div>
+          
+          <AnimatePresence>
+            {!collapsed && (
+              <motion.div
+                initial={{ opacity: 0, width: 0 }}
+                animate={{ opacity: 1, width: "auto" }}
+                exit={{ opacity: 0, width: 0 }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
+                className="ml-3 flex flex-1 items-center justify-between relative z-10"
+              >
+                <span className="truncate font-medium">{item.title}</span>
+                {item.badge && (
+                  <motion.span 
+                    className="ml-2 rounded-full bg-gradient-to-r from-pink-500 to-orange-500 px-2 py-0.5 text-xs font-bold text-white shadow-sm"
+                    animate={{ scale: [1, 1.1, 1] }}
+                    transition={{ duration: 2, repeat: Infinity }}
+                  >
+                    {item.badge}
+                  </motion.span>
+                )}
+              </motion.div>
             )}
-          </div>
-        )}
-        
-        {/* Simplified tooltip for collapsed state */}
-        {collapsed && (
-          <div className="absolute left-full ml-2 hidden group-hover:block z-50">
-            <div className="rounded bg-slate-800 px-2 py-1 text-xs text-white border border-slate-700">
-              {item.title}
-            </div>
-          </div>
-        )}
-      </Link>
+          </AnimatePresence>
+          
+          {/* Enhanced tooltip for collapsed state */}
+          <AnimatePresence>
+            {collapsed && isHovered && (
+              <motion.div
+                initial={{ opacity: 0, x: -10, scale: 0.9 }}
+                animate={{ opacity: 1, x: 0, scale: 1 }}
+                exit={{ opacity: 0, x: -10, scale: 0.9 }}
+                transition={{ duration: 0.2 }}
+                className="absolute left-full ml-3 z-50 pointer-events-none"
+              >
+                <div className="rounded-lg bg-slate-800/95 backdrop-blur-sm px-3 py-2 text-sm text-white border border-slate-600/50 shadow-xl">
+                  <div className="font-medium">{item.title}</div>
+                  {item.badge && (
+                    <div className="text-xs text-slate-300 mt-1">New updates available</div>
+                  )}
+                  {/* Tooltip arrow */}
+                  <div className="absolute left-0 top-1/2 -translate-x-1 -translate-y-1/2 w-2 h-2 bg-slate-800 rotate-45 border-l border-b border-slate-600/50" />
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </Link>
+      </motion.div>
     );
-  }, [pathname, collapsed, onClose]);
+  }, [pathname, collapsed, onClose, hoveredItem]);
 
   // Memoize the navigation items with stable references
   const navItems = React.useMemo(() => {
@@ -179,109 +251,118 @@ export function Sidebar({
   }, [filteredNavItems, renderNavItem]);
 
   return (
-    <div
+    <motion.div
+      initial={{ x: -100, opacity: 0 }}
+      animate={{ x: 0, opacity: 1 }}
+      transition={{ duration: 0.4, ease: "easeOut" }}
       className={cn(
-        "relative flex h-screen flex-col bg-slate-900 border-r border-slate-700/30",
+        "relative flex h-screen flex-col bg-white border-r border-slate-200/60 shadow-xl",
         collapsed ? "w-16" : "w-64",
         className
       )}
     >
-      {/* Logo / Header - simplified */}
-      <div className="flex h-16 items-center justify-between border-b border-slate-700/30 px-4 bg-slate-800/50">
-        <div className="flex items-center">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-pink-500 to-purple-600">
-            <Ticket className="h-5 w-5 text-white" />
-          </div>
-        </div>
+      {/* Enhanced background effects */}
+      <div className="absolute inset-0 bg-gradient-to-br from-blue-50/30 via-white to-indigo-50/30 pointer-events-none" />
+      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-blue-500/20 to-transparent" />
+      {/* Enhanced Logo / Header */}
+      <motion.div 
+        className="flex h-20 items-center justify-between border-b border-slate-200/60 px-4 bg-gradient-to-r from-white/95 via-slate-50/95 to-white/95 backdrop-blur-sm relative overflow-hidden"
+        initial={{ y: -20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.4, delay: 0.05 }}
+      >
+        {/* Background glow */}
+        <div className="absolute inset-0 bg-gradient-to-r from-blue-600/5 to-indigo-600/5" />
         
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 text-slate-400 hover:text-white hover:bg-slate-700/50"
-          onClick={() => setCollapsed?.(!collapsed)}
+        <AnimatePresence>
+          {!collapsed && (
+            <motion.div 
+              className="flex items-center gap-3"
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.3 }}
+            >
+              <motion.div 
+                className="relative"
+                whileHover={{ scale: 1.05, rotate: 5 }}
+                transition={{ type: "spring", stiffness: 400, damping: 10 }}
+              >
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 shadow-lg">
+                  <Zap className="h-6 w-6 text-white drop-shadow-sm" />
+                </div>
+                <div className="absolute -top-1 -right-1 h-4 w-4 bg-gradient-to-br from-green-400 to-emerald-500 rounded-full border-2 border-white shadow-sm animate-pulse" />
+              </motion.div>
+              <div>
+                <h2 className="text-sm font-bold text-slate-800 tracking-tight">
+                  Kardex
+                </h2>
+                <p className="text-xs text-slate-500 font-medium -mt-0.5">
+                  Dashboard
+                </p>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+        
+        <motion.div
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
         >
-          {collapsed ? (
-            <Menu className="h-4 w-4" />
-          ) : (
-            <ChevronLeft className="h-4 w-4" />
-          )}
-        </Button>
-      </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-all duration-200 group"
+            onClick={() => setCollapsed?.(!collapsed)}
+          >
+            <motion.div
+              animate={{ rotate: collapsed ? 0 : 180 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+            >
+              {collapsed ? (
+                <ChevronRight className="h-4 w-4 group-hover:scale-110 transition-transform" />
+              ) : (
+                <ChevronLeft className="h-4 w-4 group-hover:scale-110 transition-transform" />
+              )}
+            </motion.div>
+          </Button>
+        </motion.div>
+      </motion.div>
 
-      {/* Navigation Section - simplified */}
-      <div className="flex-1 overflow-y-auto py-4">
-        {!collapsed && (
-          <div className="mb-4 px-4">
-            <h3 className="text-xs font-medium text-slate-400 uppercase tracking-wider">
-              Navigation
-            </h3>
-          </div>
-        )}
-        <nav className="space-y-1 px-2">
-          {navItems}
-        </nav>
-      </div>
-
-      {/* Footer / User Profile */}
-      <div className="border-t border-slate-700/30 p-4 bg-gradient-to-r from-slate-800/30 to-slate-900/30">
-        <div className="flex items-center gap-3 group cursor-pointer hover:bg-slate-700/20 rounded-xl p-2 transition-all duration-300">
-          <div className="relative">
-            <Avatar className="h-10 w-10 ring-2 ring-purple-400/40 group-hover:ring-purple-400/60 transition-all duration-300">
-              <AvatarFallback className="bg-gradient-to-br from-purple-600 to-pink-600 text-white font-bold text-sm">
-                {userRole
-                  ? userRole
-                      .split("_")
-                      .map((n) => n?.[0] || '')
-                      .filter(Boolean)
-                      .join("") || 'U'
-                  : 'U'}
-              </AvatarFallback>
-            </Avatar>
-            <div className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full bg-gradient-to-br from-green-400 to-emerald-500 border-2 border-slate-900 shadow-sm" />
-          </div>
-          
+      {/* Enhanced Navigation Section */}
+      <div className="flex-1 py-4 relative">
+        <AnimatePresence>
           {!collapsed && (
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-white truncate">
-                {userRole === UserRole.ADMIN
-                  ? "Administrator"
-                  : userRole === UserRole.SERVICE_PERSON
-                  ? "Service Person"
-                  : "Zone User"}
-              </p>
-              <p className="text-xs text-slate-400 capitalize truncate">
-                {userRole ? userRole.toLowerCase().replace("_", " ") : 'user'} • Online
-              </p>
-            </div>
+            <motion.div 
+              className="mb-4 px-4"
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.2, delay: 0.1 }}
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <Sparkles className="h-3 w-3 text-blue-400" />
+                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                  Navigation
+                </h3>
+              </div>
+              <div className="h-px bg-gradient-to-r from-blue-500/20 via-indigo-500/20 to-transparent" />
+            </motion.div>
           )}
-          
-          {!collapsed && (
-            <ChevronRight className="h-4 w-4 text-slate-400 group-hover:text-white transition-colors" />
-          )}
-        </div>
+        </AnimatePresence>
         
-        {/* Quick Actions */}
-        {!collapsed && (
-          <div className="mt-3 flex gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="flex-1 h-8 text-xs text-slate-400 hover:text-white hover:bg-slate-700/50"
-            >
-              <Settings className="h-3 w-3 mr-1" />
-              Settings
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="flex-1 h-8 text-xs text-slate-400 hover:text-white hover:bg-slate-700/50"
-            >
-              <HelpCircle className="h-3 w-3 mr-1" />
-              Help
-            </Button>
-          </div>
-        )}
+        <div className="px-3 pb-4 max-h-full overflow-y-auto scrollbar-thin scrollbar-track-slate-800 scrollbar-thumb-slate-600 hover:scrollbar-thumb-slate-500">
+          <motion.nav 
+            className="space-y-1.5"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.3, delay: 0.2 }}
+          >
+            {navItems}
+          </motion.nav>
+        </div>
       </div>
-    </div>
+
+    </motion.div>
   );
 }

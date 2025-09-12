@@ -25,7 +25,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Loader2 } from "lucide-react";
+import { Loader2, CheckCircle2 } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 
 const loginSchema = z.object({
@@ -40,15 +40,12 @@ export default function LoginPage() {
   const { login, isLoading, isAuthenticated } = useAuth();
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loginSuccess, setLoginSuccess] = useState(false);
 
+  // Redirects are handled in AuthContext after login; avoid duplicate push here
   useEffect(() => {
-    if (isAuthenticated) {
-      const redirectTo =
-        new URLSearchParams(window.location.search).get("redirectTo") ||
-        "/dashboard";
-      router.push(redirectTo);
-    }
-  }, [isAuthenticated, router]);
+    // no-op
+  }, [isAuthenticated]);
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -60,13 +57,15 @@ export default function LoginPage() {
     setIsSubmitting(true);
     try {
       await login(values.email, values.password);
-      toast({
-        title: "Login successful",
-        description: "You will be redirected to the dashboard shortly...",
-      });
       
-      // Add a 2-second delay before redirecting
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Show success state
+      setLoginSuccess(true);
+      
+      toast({
+        title: "🎉 Login Successful!",
+        description: "Redirecting...",
+        duration: 1500,
+      });
       
     } catch (error: any) {
       toast({
@@ -78,6 +77,7 @@ export default function LoginPage() {
       });
     } finally {
       setIsSubmitting(false);
+      setLoginSuccess(false);
     }
   };
 
@@ -95,7 +95,23 @@ export default function LoginPage() {
         </CardHeader>
 
         {/* Form Section */}
-        <CardContent className="p-8 bg-white">
+        <CardContent className="p-8 bg-white relative">
+          {/* Success Overlay */}
+          {loginSuccess && (
+            <div className="absolute inset-0 bg-white/95 backdrop-blur-sm flex items-center justify-center z-10 rounded-lg">
+              <div className="text-center">
+                <CheckCircle2 className="h-16 w-16 text-green-500 mx-auto mb-4 animate-pulse" />
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">Login Successful!</h3>
+                <p className="text-gray-600">Redirecting to dashboard...</p>
+                <div className="mt-4">
+                  <div className="w-32 h-2 bg-gray-200 rounded-full mx-auto overflow-hidden">
+                    <div className="h-full bg-gradient-to-r from-[#507295] to-[#aac01d] rounded-full animate-pulse"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
               {/* Email */}
@@ -171,13 +187,22 @@ export default function LoginPage() {
               {/* Submit */}
               <Button
                 type="submit"
-                disabled={isLoading || isSubmitting}
-                className="w-full bg-[#aac01d] text-white font-semibold py-2 rounded-md hover:bg-[#96b216] transition"
+                disabled={isLoading || isSubmitting || loginSuccess}
+                className={`w-full font-semibold py-3 rounded-md transition-all duration-300 ${
+                  loginSuccess 
+                    ? "bg-green-500 hover:bg-green-500" 
+                    : "bg-[#aac01d] hover:bg-[#96b216]"
+                } text-white`}
               >
-                {isLoading || isSubmitting ? (
+                {loginSuccess ? (
+                  <>
+                    <CheckCircle2 className="h-4 w-4 mr-2" />
+                    Login Successful!
+                  </>
+                ) : isLoading || isSubmitting ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Signing in...
+                    <span className="animate-pulse">Signing in...</span>
                   </>
                 ) : (
                   "Sign In"

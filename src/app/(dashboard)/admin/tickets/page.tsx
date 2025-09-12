@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Search, Filter, RefreshCw, List, AlertCircle, Users, UserPlus } from 'lucide-react';
+import { Plus, Search, Filter, RefreshCw, List, AlertCircle, Users, UserPlus, Clock, CheckCircle, XCircle, MoreHorizontal, Eye, Edit } from 'lucide-react';
 import { format } from 'date-fns';
 import { useToast } from '@/components/ui/use-toast';
 import { Ticket, TicketStatus, Priority } from '@/types/ticket';
@@ -159,63 +159,154 @@ export default function AdminTicketsPage() {
     }
   };
 
+  // Calculate stats
+  const totalTickets = tickets.length;
+  const openTickets = tickets.filter(t => t.status === TicketStatus.OPEN).length;
+  const assignedTickets = tickets.filter(t => t.status === TicketStatus.ASSIGNED || t.status === TicketStatus.IN_PROCESS).length;
+  const closedTickets = tickets.filter(t => t.status === TicketStatus.CLOSED).length;
+  const criticalTickets = tickets.filter(t => t.priority === Priority.CRITICAL).length;
+
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col space-y-4">
-        <div className="flex items-center justify-between">
+    <div className="container mx-auto py-6 space-y-6">
+      {/* Header with Gradient */}
+      <div className="relative overflow-hidden rounded-lg bg-gradient-to-r from-red-600 via-orange-600 to-red-800 p-6 text-white">
+        <div className="absolute inset-0 bg-black/20"></div>
+        <div className="relative flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold">Tickets</h1>
-            <p className="text-muted-foreground">Manage and track all support tickets</p>
+            <h1 className="text-3xl font-bold mb-2">Support Tickets</h1>
+            <p className="text-red-100">
+              Manage and track all support tickets across your organization
+            </p>
           </div>
-          <Button onClick={() => router.push('/admin/tickets/create')}>
-            <Plus className="mr-2 h-4 w-4" /> New Ticket
-          </Button>
-        </div>
-        
-        <div className="flex space-x-2 border-b">
-          <Button
-            variant={activeTab === 'all' ? 'secondary' : 'ghost'}
-            onClick={() => setActiveTab('all')}
-            className={`rounded-none border-b-2 ${activeTab === 'all' ? 'border-primary' : 'border-transparent'}`}
+          <Button 
+            onClick={() => router.push('/admin/tickets/create')}
+            className="bg-white text-red-600 hover:bg-red-50 shadow-lg"
           >
-            <List className="mr-2 h-4 w-4" />
-            All Tickets
-          </Button>
-          <Button
-            variant={activeTab === 'unassigned' ? 'secondary' : 'ghost'}
-            onClick={() => setActiveTab('unassigned')}
-            className={`rounded-none border-b-2 ${activeTab === 'unassigned' ? 'border-primary' : 'border-transparent'}`}
-          >
-            <AlertCircle className="mr-2 h-4 w-4" />
-            Unassigned
-          </Button>
-          <Button
-            variant={activeTab === 'assignedToZone' ? 'secondary' : 'ghost'}
-            onClick={() => setActiveTab('assignedToZone')}
-            className={`rounded-none border-b-2 ${activeTab === 'assignedToZone' ? 'border-primary' : 'border-transparent'}`}
-          >
-            <Users className="mr-2 h-4 w-4" />
-            Assigned to Zone Users
+            <Plus className="mr-2 h-4 w-4" />
+            New Ticket
           </Button>
         </div>
       </div>
 
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+        <Card className="bg-gradient-to-br from-red-50 to-red-100 border-red-200">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-red-600">Total Tickets</p>
+                <p className="text-2xl font-bold text-red-900">{totalTickets}</p>
+              </div>
+              <div className="h-12 w-12 rounded-full bg-red-500 flex items-center justify-center">
+                <AlertCircle className="h-6 w-6 text-white" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-orange-600">Open Tickets</p>
+                <p className="text-2xl font-bold text-orange-900">{openTickets}</p>
+              </div>
+              <div className="h-12 w-12 rounded-full bg-orange-500 flex items-center justify-center">
+                <Clock className="h-6 w-6 text-white" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-blue-600">In Progress</p>
+                <p className="text-2xl font-bold text-blue-900">{assignedTickets}</p>
+              </div>
+              <div className="h-12 w-12 rounded-full bg-blue-500 flex items-center justify-center">
+                <Users className="h-6 w-6 text-white" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-green-600">Closed</p>
+                <p className="text-2xl font-bold text-green-900">{closedTickets}</p>
+              </div>
+              <div className="h-12 w-12 rounded-full bg-green-500 flex items-center justify-center">
+                <CheckCircle className="h-6 w-6 text-white" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-purple-600">Critical</p>
+                <p className="text-2xl font-bold text-purple-900">{criticalTickets}</p>
+              </div>
+              <div className="h-12 w-12 rounded-full bg-purple-500 flex items-center justify-center">
+                <XCircle className="h-6 w-6 text-white" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Enhanced Tab Navigation */}
+      <Card className="shadow-lg">
+        <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100 rounded-t-lg pb-3">
+          <div className="flex space-x-1">
+            <Button
+              variant={activeTab === 'all' ? 'default' : 'ghost'}
+              onClick={() => setActiveTab('all')}
+              className={activeTab === 'all' ? 'bg-red-600 hover:bg-red-700 text-white' : 'hover:bg-red-50'}
+            >
+              <List className="mr-2 h-4 w-4" />
+              All Tickets
+            </Button>
+            <Button
+              variant={activeTab === 'unassigned' ? 'default' : 'ghost'}
+              onClick={() => setActiveTab('unassigned')}
+              className={activeTab === 'unassigned' ? 'bg-orange-600 hover:bg-orange-700 text-white' : 'hover:bg-orange-50'}
+            >
+              <AlertCircle className="mr-2 h-4 w-4" />
+              Unassigned
+            </Button>
+            <Button
+              variant={activeTab === 'assignedToZone' ? 'default' : 'ghost'}
+              onClick={() => setActiveTab('assignedToZone')}
+              className={activeTab === 'assignedToZone' ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'hover:bg-blue-50'}
+            >
+              <Users className="mr-2 h-4 w-4" />
+              Assigned to Zone Users
+            </Button>
+          </div>
+        </CardHeader>
+        {/* Enhanced Search and Filters */}
+        <CardContent className="pt-6">
+          <div className="flex flex-col md:flex-row gap-4">
             <div className="flex-1">
               <div className="relative">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                 <Input
                   type="search"
-                  placeholder="Search tickets..."
-                  className="w-full pl-8 sm:w-[300px] md:w-[200px] lg:w-[300px]"
+                  placeholder="Search tickets by ID, title, or customer..."
                   value={filters.search}
                   onChange={(e) => setFilters({ ...filters, search: e.target.value, page: 1 })}
+                  className="pl-10 focus:ring-2 focus:ring-red-500 focus:border-red-500"
                 />
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex gap-2">
               <Select
                 value={filters.status}
                 onValueChange={(value) => setFilters({ ...filters, status: value, page: 1 })}
@@ -259,126 +350,207 @@ export default function AdminTicketsPage() {
                 </SelectContent>
               </Select>
               
-              <Button variant="outline" size="icon" onClick={fetchTickets}>
+              <Button 
+                variant="outline" 
+                size="icon" 
+                onClick={fetchTickets}
+                className="hover:bg-red-50 hover:border-red-300"
+              >
                 <RefreshCw className="h-4 w-4" />
               </Button>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Enhanced Tickets Table */}
+      <Card className="shadow-lg">
+        <CardHeader className="bg-gradient-to-r from-red-50 to-orange-50 rounded-t-lg">
+          <CardTitle className="text-gray-800 flex items-center gap-2">
+            <AlertCircle className="h-5 w-5 text-red-600" />
+            Tickets ({tickets.length})
+          </CardTitle>
+          <CardDescription>
+            Track and manage support tickets across your organization
+          </CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>ID</TableHead>
-                  <TableHead>Title</TableHead>
-                  <TableHead>Customer</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Priority</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loading ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8">
-                      Loading tickets...
-                    </TableCell>
-                  </TableRow>
-                ) : tickets.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8">
-                      No tickets found
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  tickets.map((ticket) => (
-                    <TableRow 
-                      key={ticket.id} 
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => router.push(`/admin/tickets/${ticket.id}/list`)}
-                    >
-                      <TableCell className="font-medium">
-                        <a 
-                          href={`/admin/tickets/${ticket.id}/list`} 
-                          className="hover:underline"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          {ticket.id}
-                        </a>
-                      </TableCell>
-                      <TableCell>
-                        <a 
-                          href={`/admin/tickets/${ticket.id}/list`} 
-                          className="hover:underline"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          {ticket.title}
-                        </a>
-                      </TableCell>
-                      <TableCell>
-                        {ticket.customer?.companyName || 'N/A'}
-                      </TableCell>
-                      <TableCell>
-                        <a 
-                          href={`/admin/tickets/${ticket.id}/list`} 
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <Badge variant={getStatusBadgeVariant(ticket.status)}>
-                            {ticket.status.replace(/_/g, ' ')}
-                          </Badge>
-                        </a>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={getPriorityBadgeVariant(ticket.priority)}>
-                          {ticket.priority}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {format(new Date(ticket.createdAt), 'MMM d, yyyy')}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            router.push(`/admin/tickets/${ticket.id}/list`);
-                          }}
-                        >
-                          View
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
+        <CardContent className="p-0">
+          {tickets.length === 0 ? (
+            <div className="text-center py-12">
+              <div className="mx-auto h-24 w-24 rounded-full bg-gradient-to-br from-red-100 to-orange-100 flex items-center justify-center mb-4">
+                <AlertCircle className="h-12 w-12 text-red-500" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">No tickets found</h3>
+              <p className="text-gray-500 mb-6">
+                {activeTab === 'unassigned' ? 'All tickets are currently assigned.' : 
+                 activeTab === 'assignedToZone' ? 'No tickets assigned to zone users.' :
+                 'Create your first support ticket to get started.'}
+              </p>
+              <Button 
+                onClick={() => router.push('/admin/tickets/create')}
+                className="bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 shadow-lg"
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Create Ticket
+              </Button>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="text-left py-4 px-6 font-semibold text-gray-700">Ticket Details</th>
+                    <th className="text-left py-4 px-6 font-semibold text-gray-700">Customer</th>
+                    <th className="text-left py-4 px-6 font-semibold text-gray-700">Status & Priority</th>
+                    <th className="text-left py-4 px-6 font-semibold text-gray-700">Created</th>
+                    <th className="text-right py-4 px-6 font-semibold text-gray-700">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {loading ? (
+                    <tr>
+                      <td colSpan={5} className="text-center py-8">
+                        <div className="flex items-center justify-center">
+                          <RefreshCw className="h-6 w-6 animate-spin text-red-500 mr-2" />
+                          Loading tickets...
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    tickets.map((ticket) => (
+                      <tr 
+                        key={ticket.id} 
+                        className="hover:bg-gradient-to-r hover:from-red-50/50 hover:to-orange-50/50 transition-all duration-200"
+                      >
+                        <td className="py-4 px-6">
+                          <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-full bg-gradient-to-br from-red-500 to-orange-600 flex items-center justify-center text-white font-semibold">
+                              #{ticket.id}
+                            </div>
+                            <div>
+                              <button 
+                                onClick={() => router.push(`/admin/tickets/${ticket.id}/list`)}
+                                className="font-semibold text-gray-900 hover:text-red-600 transition-colors text-left"
+                              >
+                                {ticket.title}
+                              </button>
+                              <div className="text-sm text-gray-500">Ticket #{ticket.id}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-4 px-6">
+                          <div className="font-medium text-gray-900">
+                            {ticket.customer?.companyName || 'N/A'}
+                          </div>
+                          {ticket.customer?.email && (
+                            <div className="text-sm text-gray-500">{ticket.customer.email}</div>
+                          )}
+                        </td>
+                        <td className="py-4 px-6">
+                          <div className="space-y-2">
+                            <Badge 
+                              variant={getStatusBadgeVariant(ticket.status)}
+                              className={
+                                ticket.status === TicketStatus.OPEN ? 'bg-orange-100 text-orange-800 hover:bg-orange-200' :
+                                ticket.status === TicketStatus.ASSIGNED ? 'bg-blue-100 text-blue-800 hover:bg-blue-200' :
+                                ticket.status === TicketStatus.IN_PROCESS ? 'bg-purple-100 text-purple-800 hover:bg-purple-200' :
+                                ticket.status === TicketStatus.CLOSED ? 'bg-green-100 text-green-800 hover:bg-green-200' :
+                                'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                              }
+                            >
+                              {ticket.status.replace(/_/g, ' ')}
+                            </Badge>
+                            <div>
+                              <Badge 
+                                variant={getPriorityBadgeVariant(ticket.priority)}
+                                className={
+                                  ticket.priority === Priority.CRITICAL ? 'bg-red-100 text-red-800 hover:bg-red-200' :
+                                  ticket.priority === Priority.HIGH ? 'bg-orange-100 text-orange-800 hover:bg-orange-200' :
+                                  ticket.priority === Priority.MEDIUM ? 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200' :
+                                  'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                }
+                              >
+                                {ticket.priority}
+                              </Badge>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-4 px-6">
+                          <div className="text-sm text-gray-900">
+                            {format(new Date(ticket.createdAt), 'MMM d, yyyy')}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {format(new Date(ticket.createdAt), 'h:mm a')}
+                          </div>
+                        </td>
+                        <td className="py-4 px-6 text-right">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => router.push(`/admin/tickets/${ticket.id}/list`)}
+                            className="hover:bg-red-50 hover:text-red-600"
+                          >
+                            <Eye className="mr-2 h-4 w-4" />
+                            View
+                          </Button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
           
-          {/* Pagination */}
+          {/* Enhanced Pagination */}
           {pagination.totalPages > 1 && (
-            <div className="flex items-center justify-end space-x-2 py-4">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setFilters({ ...filters, page: Math.max(1, filters.page - 1) })}
-                disabled={filters.page === 1}
-              >
-                Previous
-              </Button>
-              <span className="text-sm text-muted-foreground">
-                Page {filters.page} of {pagination.totalPages}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setFilters({ ...filters, page: Math.min(pagination.totalPages, filters.page + 1) })}
-                disabled={filters.page >= pagination.totalPages}
-              >
-                Next
-              </Button>
+            <div className="border-t bg-gray-50 px-6 py-4">
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-gray-600">
+                  Showing page <span className="font-semibold">{filters.page}</span> of{' '}
+                  <span className="font-semibold">{pagination.totalPages}</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setFilters({ ...filters, page: Math.max(1, filters.page - 1) })}
+                    disabled={filters.page === 1}
+                    className="hover:bg-red-50 hover:border-red-300 disabled:opacity-50"
+                  >
+                    Previous
+                  </Button>
+                  <div className="flex items-center space-x-1">
+                    {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
+                      const page = i + 1;
+                      return (
+                        <Button
+                          key={page}
+                          variant={filters.page === page ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setFilters({ ...filters, page })}
+                          className={
+                            filters.page === page
+                              ? "bg-red-600 hover:bg-red-700"
+                              : "hover:bg-red-50 hover:border-red-300"
+                          }
+                        >
+                          {page}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setFilters({ ...filters, page: Math.min(pagination.totalPages, filters.page + 1) })}
+                    disabled={filters.page >= pagination.totalPages}
+                    className="hover:bg-red-50 hover:border-red-300 disabled:opacity-50"
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
             </div>
           )}
         </CardContent>

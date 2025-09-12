@@ -67,11 +67,11 @@ export async function middleware(request: NextRequest) {
 
   // Handle public routes
   if (!shouldRedirectToLogin(pathname)) {
-    // If user is logged in and tries to access auth pages, redirect to dashboard
-    if (accessToken && pathname.startsWith('/auth/')) {
-      const redirectPath = getRoleBasedRedirect(userRole);
-      return NextResponse.redirect(new URL(redirectPath, request.url));
+    // Always allow auth pages to render. Do not auto-redirect away based on cookies alone.
+    if (pathname.startsWith('/auth/')) {
+      return NextResponse.next();
     }
+    // For other public pages, proceed
     return NextResponse.next();
   }
 
