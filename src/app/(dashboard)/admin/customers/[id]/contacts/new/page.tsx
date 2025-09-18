@@ -15,9 +15,8 @@ import { useToast } from '@/components/ui/use-toast';
 import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 
-export const contactFormSchema = z.object({
+const contactFormSchema = z.object({
   name: z.string().min(2, 'Name is required'),
-  email: z.string().email('Invalid email address'),
   phone: z.string().min(10, 'Phone number must be at least 10 digits'),
   role: z.enum(['ACCOUNT_OWNER', 'CONTACT']),
 });
@@ -34,7 +33,6 @@ export default function AddContactPage() {
     resolver: zodResolver(contactFormSchema),
     defaultValues: {
       name: '',
-      email: '',
       phone: '',
       role: 'CONTACT',
     },
@@ -43,10 +41,14 @@ export default function AddContactPage() {
   const onSubmit = async (values: ContactFormValues) => {
     try {
       setIsLoading(true);
-      await apiClient.post('/contacts', {
-        ...values,
+      const contactData = {
+        name: values.name,
+        phone: values.phone,
+        role: values.role,
         customerId: Number(id),
-      });
+      };
+      
+      await apiClient.post('/contacts', contactData);
 
       toast({
         title: 'Success',
@@ -94,7 +96,7 @@ export default function AddContactPage() {
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <FormField
                   control={form.control}
                   name="name"
@@ -109,19 +111,6 @@ export default function AddContactPage() {
                   )}
                 />
 
-                <FormField
-                  control={form.control}
-                  name="email"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Email</FormLabel>
-                      <FormControl>
-                        <Input type="email" placeholder="john@example.com" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
 
                 <FormField
                   control={form.control}

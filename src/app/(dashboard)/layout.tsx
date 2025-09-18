@@ -1,43 +1,45 @@
-'use client';
-
-import { useAuth } from '@/contexts/AuthContext';
+import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { usePathname, useRouter } from 'next/navigation';
-import { useEffect } from 'react';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { getCurrentUser } from '@/lib/api/auth';
+import { UserRole } from '@/types/user.types';
 
-export default function DashboardRootLayout({
+export default async function DashboardRootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const { user, isLoading } = useAuth();
-  const router = useRouter();
-  const pathname = usePathname();
+  // Get the auth token from cookies
+  const cookieStore = cookies();
+  const token = cookieStore.get('accessToken') || cookieStore.get('token');
+  
+  // If no token, redirect to login
+  if (!token?.value) {
+    redirect('/auth/login');
+  }
 
-  useEffect(() => {
-    if (!isLoading && !user) {
-      router.push('/auth/login');
+  try {
+    // Get current user on the server
+    const user = await getCurrentUser();
+    
+    // If no user, redirect to login
+    if (!user) {
+      redirect('/auth/login');
     }
-  }, [user, isLoading, router]);
 
-  if (isLoading) {
+    // The role is already validated by the AuthResponseUser type
+    const userRole = user.role;
+
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
-      </div>
+      <TooltipProvider>
+        <DashboardLayout userRole={userRole}>
+          {children}
+        </DashboardLayout>
+      </TooltipProvider>
     );
+  } catch (error) {
+    console.error('Error getting user:', error);
+    redirect('/auth/login');
   }
-
-  if (!user) {
-    return null; // Will redirect in useEffect
-  }
-
-  return (
-    <TooltipProvider>
-      <DashboardLayout userRole={user.role}>
-        {children}
-      </DashboardLayout>
-    </TooltipProvider>
-  );
 }

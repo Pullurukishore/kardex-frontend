@@ -82,6 +82,13 @@ export default function ZoneReportsPage() {
   const [customers, setCustomers] = useState<any[]>([]);
   const [assets, setAssets] = useState<any[]>([]);
 
+  // Debug: Log when component mounts
+  useEffect(() => {
+    console.log('ZoneReportsPage mounted - reportData should be null:', reportData);
+    // Ensure no auto-generation happens
+    setReportData(null);
+  }, []);
+
   useEffect(() => {
     if (filters.reportType === 'industrial-data') {
       fetchCustomers();
@@ -120,6 +127,7 @@ export default function ZoneReportsPage() {
   };
 
   const handleDateRangeChange = (range: DateRange | undefined) => {
+    console.log('Date range changed:', range);
     if (range?.from) {
       const startOfDay = new Date(range.from);
       startOfDay.setHours(0, 0, 0, 0);
@@ -132,6 +140,7 @@ export default function ZoneReportsPage() {
   };
 
   const generateReport = async () => {
+    console.log('generateReport called manually via button click');
     try {
       setLoading(true);
       const params = new URLSearchParams();
@@ -142,6 +151,7 @@ export default function ZoneReportsPage() {
       params.append('reportType', filters.reportType);
 
       const res = await api.get(`/reports/zone?${params.toString()}`);
+      console.log('Report data received:', res.data);
       setReportData(res.data);
       toast.success('Report generated');
     } catch (e) {
@@ -151,40 +161,39 @@ export default function ZoneReportsPage() {
     }
   };
 
-  const exportReport = async (formatType: 'csv' | 'pdf') => {
+  const handleExport = async (exportFormat: 'csv' | 'pdf') => {
+    if (!reportData) {
+      toast.error('Please generate a report first');
+      return;
+    }
+    
+    setExportLoading(exportFormat);
     try {
-      setExportLoading(formatType);
       const params = new URLSearchParams();
       if (filters.dateRange?.from) params.append('from', format(filters.dateRange.from, 'yyyy-MM-dd'));
       if (filters.dateRange?.to) params.append('to', format(filters.dateRange.to, 'yyyy-MM-dd'));
       if (filters.customerId) params.append('customerId', filters.customerId);
       if (filters.assetId) params.append('assetId', filters.assetId);
       params.append('reportType', filters.reportType);
-      params.append('format', formatType);
+      params.append('format', exportFormat);
 
-      const response = await api.get(`/reports/zone/export?${params.toString()}` , {
-        responseType: 'blob',
-        headers: { 'Accept': formatType === 'pdf' ? 'application/pdf' : 'text/csv' },
-        timeout: 60000,
+      const response = await api.get(`/reports/zone/export?${params.toString()}`, {
+        responseType: 'blob'
       });
 
-      const blob = response.data instanceof Blob ? response.data : new Blob([response.data], { type: response.headers['content-type'] || (formatType === 'pdf' ? 'application/pdf' : 'text/csv') });
+      const blob = new Blob([response.data]);
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
-      link.style.display = 'none';
       link.href = url;
-      const ts = format(new Date(), 'yyyy-MM-dd-HHmm');
-      const reportLabel = REPORT_TYPES.find(r => r.value === filters.reportType)?.label || 'Report';
-      link.setAttribute('download', `${reportLabel.replace(/\s+/g, '-')}-${ts}.${formatType}`);
+      link.download = `zone-report-${filters.reportType}-${format(new Date(), 'yyyy-MM-dd')}.${exportFormat}`;
       document.body.appendChild(link);
       link.click();
-      setTimeout(() => {
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-      }, 100);
-      toast.success(`${reportLabel} exported as ${formatType.toUpperCase()}`);
-    } catch (e: any) {
-      toast.error(e.response?.data?.message || 'Export failed');
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      toast.success(`Report exported as ${exportFormat.toUpperCase()}`);
+    } catch (e) {
+      toast.error(`Failed to export ${exportFormat.toUpperCase()}`);
     } finally {
       setExportLoading(null);
     }
@@ -474,34 +483,6 @@ export default function ZoneReportsPage() {
             </h1>
             <p className="text-muted-foreground mt-2">Generate and export reports for your assigned zone(s)</p>
           </div>
-          <div className="flex items-center gap-4">
-            <Button onClick={() => exportReport('csv')} variant="outline" disabled={!reportData || exportLoading === 'csv'} className="relative">
-              {exportLoading === 'csv' ? (
-                <>
-                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                  Exporting...
-                </>
-              ) : (
-                <>
-                  <Download className="mr-2 h-4 w-4" />
-                  Export CSV
-                </>
-              )}
-            </Button>
-            <Button onClick={() => exportReport('pdf')} variant="outline" disabled={!reportData || exportLoading === 'pdf'} className="relative">
-              {exportLoading === 'pdf' ? (
-                <>
-                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                  Exporting...
-                </>
-              ) : (
-                <>
-                  <Download className="mr-2 h-4 w-4" />
-                  Export PDF
-                </>
-              )}
-            </Button>
-          </div>
         </div>
       </header>
 
@@ -517,7 +498,10 @@ export default function ZoneReportsPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div>
               <label className="text-sm font-medium mb-1 block">Report Type</label>
-              <Select value={filters.reportType} onValueChange={(value) => setFilters(prev => ({ ...prev, reportType: value, customerId: undefined, assetId: undefined }))}>
+              <Select value={filters.reportType} onValueChange={(value) => {
+                console.log('Report type changed to:', value);
+                setFilters(prev => ({ ...prev, reportType: value, customerId: undefined, assetId: undefined }));
+              }}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select report type" />
                 </SelectTrigger>
@@ -598,16 +582,67 @@ export default function ZoneReportsPage() {
                 </div>
               </>
             )}
-
-            <div className="flex items-end">
-              <Button onClick={generateReport} className="w-full" disabled={loading}>
-                {loading ? (<><RefreshCw className="mr-2 h-4 w-4 animate-spin" />Generating...</>) : 'Generate Report'}
+            <div className="flex flex-col sm:flex-row gap-3 items-end mt-4">
+              <Button 
+                onClick={generateReport} 
+                disabled={loading}
+                className="flex-1"
+              >
+                {loading ? (
+                  <span className="flex items-center justify-center">
+                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                    Generating...
+                  </span>
+                ) : (
+                  <span className="flex items-center justify-center">
+                    <BarChart3 className="mr-2 h-4 w-4" />
+                    Generate Report
+                  </span>
+                )}
               </Button>
+              
+              <div className="flex gap-2">
+                <Button 
+                  onClick={() => handleExport('csv')} 
+                  disabled={!reportData || exportLoading === 'csv'}
+                  variant="outline" 
+                  className="flex-1"
+                >
+                  {exportLoading === 'csv' ? (
+                    <span className="flex items-center justify-center">
+                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                      CSV
+                    </span>
+                  ) : (
+                    <span className="flex items-center justify-center">
+                      <Download className="mr-2 h-4 w-4" />
+                      CSV
+                    </span>
+                  )}
+                </Button>
+                <Button 
+                  onClick={() => handleExport('pdf')} 
+                  disabled={!reportData || exportLoading === 'pdf'}
+                  variant="outline" 
+                  className="flex-1"
+                >
+                  {exportLoading === 'pdf' ? (
+                    <span className="flex items-center justify-center">
+                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                      PDF
+                    </span>
+                  ) : (
+                    <span className="flex items-center justify-center">
+                      <Download className="mr-2 h-4 w-4" />
+                      PDF
+                    </span>
+                  )}
+                </Button>
+              </div>
             </div>
           </div>
         </CardContent>
       </Card>
-
       {reportData ? (
         <div className="space-y-6">
           {reportData.summary && (

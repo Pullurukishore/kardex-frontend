@@ -7,12 +7,14 @@ import {
   useState,
   type ReactNode,
   useCallback,
+  useRef,
 } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { getCookie, deleteCookie, setCookie } from 'cookies-next';
 import { toast } from 'sonner';
-import { authService } from '@/services/auth.service';
+import { authService, isTokenExpired } from '@/services/auth.service';
 import { UserRole, type User } from '@/types/user.types';
+import { isBrowser, safeLocalStorage, safeSessionStorage } from '@/lib/browser';
 
 export type LoginResponse = {
   success: boolean;
@@ -64,7 +66,7 @@ function AuthProvider({ children }: { children: ReactNode }) {
       case UserRole.ZONE_USER:
         return '/zone/dashboard';
       case UserRole.SERVICE_PERSON:
-        return '/service/tickets';
+        return '/service-person/dashboard';
       default:
         return '/auth/login';
     }
@@ -72,28 +74,28 @@ function AuthProvider({ children }: { children: ReactNode }) {
 
   const enforceRoleAccess = (role: UserRole) => {
     const allowedPath = getRoleBasedRedirect(role);
-    // ❌ If user tries to access a page outside their role, redirect
-    if (pathname.startsWith('/admin') && role !== UserRole.ADMIN) {
-      router.replace(allowedPath);
-    } else if (pathname.startsWith('/zone') && role !== UserRole.ZONE_USER) {
-      router.replace(allowedPath);
-    } else if (pathname.startsWith('/service') && role !== UserRole.SERVICE_PERSON) {
-      router.replace(allowedPath);
-    }
+    if (pathname.startsWith('/admin') && role !== UserRole.ADMIN) router.replace(allowedPath);
+    if (pathname.startsWith('/zone') && role !== UserRole.ZONE_USER) router.replace(allowedPath);
+    if (pathname.startsWith('/service-person') && role !== UserRole.SERVICE_PERSON) router.replace(allowedPath);
   };
 
-  const loadUser = useCallback(async (): Promise<User | null> => {
-    // Skip if we're already on a public route
-    if (pathname.startsWith('/auth/')) {
+  const loadUser = useCallback(async (currentPath?: string): Promise<User | null> => {
+    const pathToCheck = currentPath || pathname;
+    if (pathToCheck.startsWith('/auth/')) {
       setIsLoading(false);
       return null;
     }
     try {
-      const token = getCookie('accessToken');
+      const token = getCookie('accessToken') || getCookie('token');
+      console.log('LoadUser - Token found:', !!token);
       if (token) setAccessToken(token as string);
 
+      console.log('LoadUser - Calling getCurrentUser...');
       const userData = await authService.getCurrentUser();
+      console.log('LoadUser - User data received:', userData);
+      
       if (!userData) {
+        console.log('LoadUser - No user data received');
         setUser(null);
         return null;
       }
@@ -108,17 +110,20 @@ function AuthProvider({ children }: { children: ReactNode }) {
         customerId: coerceOptionalNumber((userData as any).customerId),
       };
 
+      console.log('LoadUser - Safe user created:', safeUser);
       setUser(safeUser);
 
-      // ✅ Sync role cookie always
       setCookie('userRole', safeUser.role, {
         path: '/',
-        secure: process.env.NODE_ENV === 'production',
+        secure: process.env.NODE_ENV === 'production' ? true : false,
         sameSite: 'lax',
       });
 
-      // ✅ Enforce role access on refresh
-      enforceRoleAccess(safeUser.role);
+      // Only enforce role access if we're not on auth pages
+      if (!pathToCheck.startsWith('/auth/')) {
+        console.log('LoadUser - Enforcing role access for:', safeUser.role);
+        enforceRoleAccess(safeUser.role);
+      }
 
       return safeUser;
     } catch (err) {
@@ -128,129 +133,167 @@ function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  }, [pathname, router]);
+  }, []);
+
+  const authCheckInProgress = useRef(false);
 
   useEffect(() => {
     const checkAuth = async () => {
-      const token = getCookie('accessToken');
-      if (!token) {
-        if (!pathname.startsWith('/auth/')) router.replace('/auth/login');
-        setIsLoading(false);
-        return;
-      }
-
+      // Prevent multiple simultaneous auth checks
+      if (authCheckInProgress.current) return;
+      
       try {
-        const userData = await loadUser();
-        if (userData && pathname.startsWith('/auth/')) {
-          const redirectPath = getRoleBasedRedirect(userData.role);
-          router.replace(redirectPath);
-        } else if (!userData && !pathname.startsWith('/auth/')) {
-          router.replace('/auth/login');
+        authCheckInProgress.current = true;
+        setIsLoading(true);
+        
+        // If user is already set in state, don't clear it immediately
+        if (user) {
+          console.log('CheckAuth - User already in state:', user.email, user.role);
+          setIsLoading(false);
+          return;
         }
-      } catch (err) {
-        console.error('Auth check failed:', err);
-        if (!pathname.startsWith('/auth/')) router.replace('/auth/login');
+        
+        const role = getCookie('userRole') as UserRole | undefined;
+        console.log('CheckAuth - Role from cookie:', role);
+        
+        if (!role) {
+          console.log('CheckAuth - No role found, checking if we have a token...');
+          const token = getCookie('accessToken') || getCookie('token');
+          
+          if (token) {
+            console.log('CheckAuth - Token found but no role, trying to load user...');
+            try {
+              const userData = await loadUser(pathname);
+              if (userData) {
+                console.log('CheckAuth - User loaded successfully from token');
+                return;
+              }
+            } catch (err) {
+              console.error('CheckAuth - Failed to load user from token:', err);
+            }
+          }
+          
+          console.log('CheckAuth - No valid authentication found');
+          setUser(null);
+          setAccessToken(null);
+          return;
+        }
+
+        // Only proceed if we have a valid role
+        if (Object.values(UserRole).includes(role)) {
+          try {
+            const userData = await loadUser(pathname);
+            console.log('CheckAuth - User data loaded:', userData);
+            
+            if (userData) {
+              console.log('CheckAuth - User authenticated successfully');
+              return;
+            }
+          } catch (err) {
+            console.error('CheckAuth - Failed to load user:', err);
+          }
+        }
+        
+        // If we get here, either we couldn't load user data or role was invalid
+        console.log('CheckAuth - Clearing auth state due to failed validation');
+        await clearAuthState();
+      } catch (error) {
+        console.error('Auth check error:', error);
+        await clearAuthState();
       } finally {
         setIsLoading(false);
+        authCheckInProgress.current = false;
       }
     };
+    
+    // Only run auth check in browser and if we're not on auth pages
+    if (isBrowser && !pathname.startsWith('/auth/')) {
+      checkAuth();
+    } else {
+      setIsLoading(false);
+    }
+    
+    // Cleanup function
+    return () => {
+      authCheckInProgress.current = false;
+    };
+  }, [pathname, user]);
 
-    checkAuth();
-  }, [pathname, router, loadUser]);
+  const clearAuthState = async () => {
+    setUser(null);
+    setAccessToken(null);
+    setError(null);
+    
+    // Clear cookies
+    deleteCookie('accessToken');
+    deleteCookie('refreshToken');
+    deleteCookie('userRole');
+    
+    // Clear storage
+    safeLocalStorage.removeItem('auth_token');
+    safeLocalStorage.removeItem('refresh_token');
+    safeSessionStorage.removeItem('currentUser');
+  };
 
   const login = async (email: string, password: string) => {
-    const startTime = performance.now();
     setIsLoading(true);
     setError(null);
 
     try {
-      console.time('login-api-call');
+      console.log('AuthContext: Starting login process...');
       const response = await authService.login({ email, password });
-      console.timeEnd('login-api-call');
-      
+      console.log('AuthContext: Login response received:', response);
+
       if (!response || !response.user || !response.accessToken) {
-        console.error('Invalid login response:', response);
         throw new Error('Invalid login response from server');
       }
 
-      console.log('Login response:', {
-        hasUser: !!response.user,
-        hasToken: !!response.accessToken,
-        userRole: response.user?.role
-      });
-
-      // Process user data first to ensure all required fields are set
       const safeUser: User = {
         id: response.user.id,
         email: response.user.email || email,
         name: response.user.name || response.user.email?.split('@')[0] || 'User',
-        role: response.user.role || 'customer', // Default to 'customer' if role is missing
+        role: response.user.role || 'customer',
         isActive: response.user.isActive ?? true,
         tokenVersion: response.user.tokenVersion || '0',
         lastPasswordChange: response.user.lastPasswordChange || new Date().toISOString(),
-        // Include any additional user fields that might be needed
         ...(response.user.phone && { phone: response.user.phone }),
         ...(response.user.companyName && { companyName: response.user.companyName }),
         ...(response.user.zoneId !== undefined && { zoneId: coerceOptionalNumber((response.user as any).zoneId) }),
         ...(response.user.customerId !== undefined && { customerId: coerceOptionalNumber((response.user as any).customerId) }),
       };
 
-      console.log('Processed user:', safeUser);
-
-      // Set cookies with proper values
       const cookieOptions = {
         path: '/',
-        secure: process.env.NODE_ENV === 'production',
+        secure: process.env.NODE_ENV === 'production' ? true : false,
         sameSite: 'lax' as const,
       };
 
-      console.log('Setting cookies with options:', {
-        ...cookieOptions,
-        accessTokenMaxAge: '15m',
-        refreshTokenMaxAge: '7d',
-        userRoleMaxAge: '7d',
-      });
+      // Set cookies
+      setCookie('accessToken', response.accessToken, { ...cookieOptions, maxAge: 60 * 60 * 24 });
+      setCookie('refreshToken', response.refreshToken || '', { ...cookieOptions, maxAge: 60 * 60 * 24 * 7 });
+      setCookie('userRole', safeUser.role, { ...cookieOptions, maxAge: 60 * 60 * 24 * 7 });
 
-      setCookie('accessToken', response.accessToken, {
-        ...cookieOptions,
-        maxAge: 60 * 15, // 15 minutes to match access token TTL
-      });
-      
-      setCookie('refreshToken', response.refreshToken || '', {
-        ...cookieOptions,
-        maxAge: 60 * 60 * 24 * 7, // 7 days for refresh token
-      });
-
-      // Update state
+      // Update state immediately to prevent race conditions
       setAccessToken(response.accessToken);
       setUser(safeUser);
+      console.log('AuthContext: User state updated immediately:', safeUser);
 
-      // Set role cookie
-      setCookie('userRole', safeUser.role, {
-        ...cookieOptions,
-        maxAge: 60 * 60 * 24 * 7, // 7 days to match refresh token
-      });
-
-      console.timeEnd('login-setup');
-      console.log('Auth state updated', { hasToken: true, hasUser: true, isAuthenticated: true });
-
-      // Show success message
+      console.log('AuthContext: Login successful, preparing redirect...');
+      
+      // Show success toast
       toast.success(`Welcome back, ${safeUser.name}!`, {
         description: `You are logged in as ${safeUser.role.toLowerCase().replace('_', ' ')}`,
+        duration: 3000,
       });
 
-      // Get the redirect path based on user role
+      // Redirect immediately without delay to prevent race conditions
       const redirectPath = getRoleBasedRedirect(safeUser.role);
-      console.log(`Login successful, redirecting to: ${redirectPath}`);
-      
-      // Use replace instead of push to prevent adding to browser history
+      console.log('AuthContext: Redirecting to:', redirectPath);
       router.replace(redirectPath);
-      
-      console.log(`Login process completed in ${performance.now() - startTime}ms`);
-      
+
       return { success: true, user: safeUser };
     } catch (error: any) {
-      console.error('Login error:', error);
+      console.error('AuthContext: Login error:', error);
       const errorMessage = error?.response?.data?.message || 'Login failed. Please try again.';
       setError(errorMessage);
       toast.error(errorMessage);
@@ -266,26 +309,23 @@ function AuthProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       console.error('Logout error:', err);
     } finally {
-      // Clear all auth-related cookies
       const cookieOptions = {
         path: '/',
-        domain: window.location.hostname,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax' as const
+        ...(typeof window !== 'undefined' && { domain: window.location.hostname }),
+        secure: process.env.NODE_ENV === 'production' ? true : false,
+        sameSite: 'lax' as const,
       };
-      
-      // Clear all possible auth cookies
+
       deleteCookie('accessToken', cookieOptions);
       deleteCookie('refreshToken', cookieOptions);
-      deleteCookie('token', cookieOptions);
       deleteCookie('userRole', cookieOptions);
-      
-      // Clear state
+
       setUser(null);
       setAccessToken(null);
-      
-      // Force a hard redirect to login without callbackUrl
-      window.location.href = '/auth/login';
+
+      if (typeof window !== 'undefined') {
+        window.location.href = '/auth/login';
+      }
     }
   };
 
@@ -303,8 +343,14 @@ function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const { user, accessToken, refreshToken } = await authService.register(userData);
 
-      setCookie('accessToken', accessToken, { path: '/', secure: process.env.NODE_ENV === 'production', sameSite: 'lax' });
-      setCookie('refreshToken', refreshToken, { path: '/', secure: process.env.NODE_ENV === 'production', sameSite: 'lax' });
+      const cookieOptions = {
+        path: '/',
+        secure: process.env.NODE_ENV === 'production' ? true : false,
+        sameSite: 'lax' as const,
+      };
+
+      setCookie('accessToken', accessToken, cookieOptions);
+      setCookie('refreshToken', refreshToken, cookieOptions);
 
       const registeredUser: User = {
         ...user,
@@ -322,7 +368,6 @@ function AuthProvider({ children }: { children: ReactNode }) {
 
       router.replace(getRoleBasedRedirect(user.role));
     } catch (err: any) {
-      console.error('Registration failed:', err);
       const errorMessage = err?.response?.data?.message || 'Registration failed. Please try again.';
       setError(errorMessage);
       toast.error(errorMessage);
@@ -354,7 +399,7 @@ function AuthProvider({ children }: { children: ReactNode }) {
         clearError,
       }}
     >
-      {!isLoading && children}
+      {children}
     </AuthContext.Provider>
   );
 }

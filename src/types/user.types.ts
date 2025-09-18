@@ -19,8 +19,8 @@ export type User = {
   name: string | null;  // Allow null for name
   isActive?: boolean;
   tokenVersion?: string | number;  // Handle both string and number token versions
-  customerId?: number | null;
-  zoneId?: number | null;
+  customerId?: string | number | null;  // Handle both string and number
+  zoneId?: string | number | null;  // Handle both string and number
   serviceZones?: ServiceZone[];
   // Add other user properties as needed
   [key: string]: any;  // Allow additional properties

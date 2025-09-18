@@ -1,4 +1,4 @@
-import type { ServiceZone, CreateServiceZoneInput } from '@/types/zone';
+import type { ServiceZone, CreateServiceZoneInput, ZoneUser } from '@/types/zone';
 import api from '@/lib/api/axios';
 
 export interface ServiceZonesResponse {
@@ -83,6 +83,37 @@ export const getServiceZoneStats = async (id: number): Promise<any> => {
     return response.data;
   } catch (error) {
     console.error('Error fetching service zone stats:', error);
+    throw error;
+  }
+};
+
+// Zone User Services
+export const getZoneUser = async (id: number): Promise<ZoneUser> => {
+  try {
+    const response = await api.get<ZoneUser>(`/zone-users/${id}`);
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching zone user:', error);
+    throw error;
+  }
+};
+
+export const updateZoneUserAssignments = async (id: number, serviceZoneIds: number[]): Promise<ZoneUser> => {
+  try {
+    const response = await api.put<ZoneUser>(`/zone-users/${id}`, { serviceZoneIds });
+    return response.data;
+  } catch (error) {
+    console.error('Error updating zone user assignments:', error);
+    throw error;
+  }
+};
+
+export const getAllServiceZones = async (): Promise<ServiceZone[]> => {
+  try {
+    const response = await api.get<ServiceZone[]>('/service-zones/all');
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching all service zones:', error);
     throw error;
   }
 };

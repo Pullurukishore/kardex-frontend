@@ -46,6 +46,8 @@ export function Header({ onMenuClick, className }: HeaderProps) {
   
   // Monitor online status
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
     
@@ -125,7 +127,7 @@ export function Header({ onMenuClick, className }: HeaderProps) {
             </motion.div>
             <div>
               <h1 className="text-xl font-black tracking-tight bg-gradient-to-r from-slate-800 via-purple-700 to-indigo-700 bg-clip-text text-transparent">
-                Kardex Management
+                Kardex Ticket Management
               </h1>
               <div className="flex items-center gap-2 -mt-1">
                 <p className="text-xs text-slate-500 font-medium tracking-wider">

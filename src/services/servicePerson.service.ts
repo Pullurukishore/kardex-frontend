@@ -100,11 +100,45 @@ export const getServicePersons = async (params?: {
 
 export const getServicePerson = async (id: number): Promise<ServicePerson> => {
   try {
+    console.log(`Fetching service person with ID: ${id}`);
     const response = await apiClient.get<ServicePerson>(`/service-persons/${id}`);
-    if (!response.data) throw new Error('Service person not found');
-    return response.data as ServicePerson;
+    console.log('Service person API response:', response);
+    
+    // Check if response has data and it's not empty
+    if (!response) {
+      console.error('No response received from API');
+      throw new Error('No response received from API');
+    }
+    
+    // Handle different response structures
+    let servicePersonData: ServicePerson;
+    
+    if (response.data) {
+      servicePersonData = response.data as ServicePerson;
+    } else if (response && typeof response === 'object' && 'id' in response && 'email' in response) {
+      // Response might be the service person object directly
+      // Check for essential ServicePerson fields
+      servicePersonData = response as unknown as ServicePerson;
+    } else {
+      console.error('Unexpected response structure:', response);
+      throw new Error('Service person not found - invalid response structure');
+    }
+    
+    // Validate that we have a service person with the expected ID
+    if (!servicePersonData || servicePersonData.id !== id) {
+      console.error('Service person data invalid or ID mismatch:', servicePersonData);
+      throw new Error('Service person not found');
+    }
+    
+    console.log('Successfully retrieved service person:', servicePersonData);
+    return servicePersonData;
   } catch (error) {
     console.error('Error fetching service person:', error);
+    console.error('Error details:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      status: error && typeof error === 'object' && 'status' in error ? error.status : 'No status',
+      response: error && typeof error === 'object' && 'response' in error ? error.response : 'No response data'
+    });
     throw error;
   }
 };

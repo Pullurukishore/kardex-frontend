@@ -9,7 +9,8 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { RefreshCw, Users, Search, Building2, MapPin } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { RefreshCw, Users, Search, Building2, MapPin, Clock, Package, MoreHorizontal, Eye, Edit, Trash2 } from 'lucide-react';
 
 interface Customer {
   id: number;
@@ -117,12 +118,15 @@ export default function ZoneCustomersPage() {
                   <TableHead>Zone</TableHead>
                   <TableHead>Industry</TableHead>
                   <TableHead>Address</TableHead>
+                  <TableHead>Timezone</TableHead>
+                  <TableHead className="text-right">Assets</TableHead>
                   <TableHead className="text-right">Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {customers.map((c) => (
-                  <TableRow key={c.id} className="cursor-pointer hover:bg-slate-50" onClick={() => router.push(`/zone/customers/${c.id}`)}>
+                  <TableRow key={c.id} className="hover:bg-slate-50">
                     <TableCell>
                       <div className="font-medium flex items-center gap-2">
                         <Building2 className="h-4 w-4 text-slate-500" />
@@ -136,15 +140,57 @@ export default function ZoneCustomersPage() {
                       </div>
                     </TableCell>
                     <TableCell>{c.industry || '—'}</TableCell>
-                    <TableCell className="truncate max-w-[280px]" title={c.address || ''}>{c.address || '—'}</TableCell>
+                    <TableCell className="truncate max-w-[200px]" title={c.address || ''}>{c.address || '—'}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Clock className="h-4 w-4 text-slate-500" />
+                        {c.timezone || '—'}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <Package className="h-4 w-4 text-slate-500" />
+                        {c.assets || 0}
+                      </div>
+                    </TableCell>
                     <TableCell className="text-right">
                       <Badge variant={c.isActive ? 'default' : 'secondary'}>{c.isActive ? 'Active' : 'Inactive'}</Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" className="h-8 w-8 p-0">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => router.push(`/zone/customers/${c.id}`)}>
+                            <Eye className="mr-2 h-4 w-4" />
+                            View
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => router.push(`/zone/customers/${c.id}/edit`)}>
+                            <Edit className="mr-2 h-4 w-4" />
+                            Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem 
+                            onClick={() => {
+                              if (confirm('Are you sure you want to delete this customer?')) {
+                                // Add delete logic here
+                              }
+                            }}
+                            className="text-red-600"
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </TableCell>
                   </TableRow>
                 ))}
                 {!loading && customers.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center text-sm text-muted-foreground py-8">
+                    <TableCell colSpan={8} className="text-center text-sm text-muted-foreground py-8">
                       No customers found
                     </TableCell>
                   </TableRow>

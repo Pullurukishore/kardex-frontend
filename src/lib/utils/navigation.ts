@@ -23,7 +23,7 @@ export function isRouteAccessible(route: string, userRole?: UserRole): boolean {
 
   // Role-based route access
   const roleRoutes: Record<UserRole, string[]> = {
-    [UserRole.ADMIN]: ['/admin', '/api/admin'],
+    [UserRole.ADMIN]: ['/admin', '/api/admin', '/admin/FSA'],
     [UserRole.SERVICE_PERSON]: ['/service-person', '/api/service-person'],
     [UserRole.ZONE_USER]: ['/zone', '/api/zone'],
   };
@@ -36,6 +36,6 @@ export function isRouteAccessible(route: string, userRole?: UserRole): boolean {
 }
 
 export function shouldRedirectToLogin(route: string): boolean {
-  const publicRoutes = ['/auth/login', '/auth/register', '/auth/forgot-password', '/auth/reset-password', '/_next', '/favicon.ico', '/api/auth'];
+  const publicRoutes = ['/auth/login', '/auth/register', '/auth/forgot-password', '/auth/reset-password', '/_next', '/favicon.ico', '/api/auth', '/'];
   return !publicRoutes.some(publicRoute => route.startsWith(publicRoute));
 }

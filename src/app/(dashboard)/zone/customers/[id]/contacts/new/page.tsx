@@ -18,13 +18,19 @@ export default function NewContactPage() {
   const [form, setForm] = useState({ name: '', email: '', phone: '' });
 
   const onSave = async () => {
-    if (!form.name || !form.email) {
-      toast.error('Name and Email are required');
+    if (!form.name || !form.phone) {
+      toast.error('Name and Phone are required');
       return;
     }
     try {
       setSaving(true);
-      await api.post(`/contacts`, { ...form, customerId: Number(customerId) });
+      const contactData = {
+        name: form.name,
+        phone: form.phone,
+        customerId: Number(customerId),
+        ...(form.email && { email: form.email }),
+      };
+      await api.post(`/contacts`, contactData);
       toast.success('Contact created');
       router.back();
     } catch (e: any) {

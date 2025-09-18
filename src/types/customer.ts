@@ -1,7 +1,7 @@
 export interface Contact {
   id: number;
   name: string;
-  email: string;
+  email?: string;
   phone: string;
   role: string;
   createdAt: string;
@@ -11,20 +11,20 @@ export interface Contact {
 export interface Customer {
   id: number;
   companyName: string;
-  address: string;
-  industry: string;
-  city: string;
-  state: string;
-  country: string;
-  postalCode: string;
-  phone: string;
-  email: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  postalCode?: string;
+  country?: string;
+  phone?: string;
+  email?: string;
   website?: string;
+  industry?: string;
   taxId?: string;
   notes?: string;
-  timezone: string;
+  status: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
   isActive: boolean;
-  serviceZoneId?: number;
+  serviceZoneId: number;
   serviceZone?: {
     id: number;
     name: string;
@@ -44,18 +44,13 @@ export interface Customer {
 }
 
 export interface CustomerFormData {
+  // Customer fields from database
   companyName: string;
-  industry: string;
-  address: string;
-  city: string;
-  state: string;
-  country: string;
-  postalCode: string;
-  phone: string;
-  email: string;
-  website?: string;
-  taxId?: string;
-  notes?: string;
+  industry?: string;
+  address?: string;
   status: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
-  serviceZoneId?: number;
+  serviceZoneId: number;
+  // Contact information (stored in contacts table)
+  contactName: string;
+  contactPhone: string;
 }

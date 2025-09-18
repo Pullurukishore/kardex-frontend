@@ -34,6 +34,7 @@ const zoneUserFormSchema = z
   .object({
     name: z.string().min(2, 'Name is required'),
     email: z.string().email('Please enter a valid email address'),
+    phone: z.string().optional(),
     password: z.string().min(6, 'Password must be at least 6 characters'),
     confirmPassword: z.string(),
     serviceZoneIds: z.array(z.number()).min(1, 'Please select at least one service zone'),
@@ -60,6 +61,7 @@ export default function NewZoneUserPage() {
     defaultValues: {
       name: '',
       email: '',
+      phone: '',
       password: '',
       confirmPassword: '',
       serviceZoneIds: [],
@@ -103,6 +105,7 @@ export default function NewZoneUserPage() {
       const payload = {
         name: values.name,
         email: values.email,
+        phone: values.phone || null,
         password: values.password,
         serviceZoneIds: values.serviceZoneIds,
         isActive: values.isActive,
@@ -134,7 +137,7 @@ export default function NewZoneUserPage() {
   };
 
   return (
-    <div className="container mx-auto py-10">
+    <div>
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center space-x-4">
           <Button variant="outline" size="icon" asChild>
@@ -180,6 +183,23 @@ export default function NewZoneUserPage() {
                       <FormControl>
                         <Input type="email" placeholder="user@example.com" {...field} />
                       </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="phone"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Phone Number</FormLabel>
+                      <FormControl>
+                        <Input type="tel" placeholder="Enter phone number (e.g., 9876543210)" {...field} />
+                      </FormControl>
+                      <FormDescription>
+                        Phone number is required for WhatsApp notifications
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}

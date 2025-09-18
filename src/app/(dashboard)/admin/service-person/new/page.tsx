@@ -25,6 +25,7 @@ interface ServiceZone {
 const createServicePersonSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
   email: z.string().email('Please enter a valid email address'),
+  phone: z.string().optional(),
   password: z.string().min(6, 'Password must be at least 6 characters'),
   confirmPassword: z.string(),
   serviceZoneIds: z.array(z.number()).optional(),
@@ -52,6 +53,7 @@ export default function NewServicePersonPage() {
     defaultValues: {
       name: '',
       email: '',
+      phone: '',
       password: '',
       confirmPassword: '',
       serviceZoneIds: [],
@@ -106,6 +108,7 @@ export default function NewServicePersonPage() {
       const payload = {
         name: data.name,
         email: data.email,
+        phone: data.phone || null,
         password: data.password,
         serviceZoneIds: selectedZones,
       };
@@ -147,7 +150,7 @@ export default function NewServicePersonPage() {
 
   if (created) {
     return (
-      <div className="container mx-auto py-12 max-w-lg">
+      <div className="max-w-lg mx-auto py-12">
         <Card className="text-center">
           <CardHeader>
             <div className="flex justify-center mb-2">
@@ -176,7 +179,7 @@ export default function NewServicePersonPage() {
   }
 
   return (
-    <div className="container mx-auto py-6 max-w-2xl">
+    <div className="max-w-2xl mx-auto">
       {/* Header */}
       <div className="flex items-center gap-4 mb-6">
         <Link href="/admin/service-person">
@@ -230,6 +233,23 @@ export default function NewServicePersonPage() {
                   <p className="text-sm text-red-500">{errors.email.message}</p>
                 )}
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="phone">Phone Number</Label>
+              <Input
+                id="phone"
+                type="tel"
+                placeholder="Enter phone number (e.g., 9876543210)"
+                {...register('phone')}
+                className={errors.phone ? 'border-red-500' : ''}
+              />
+              <p className="text-sm text-muted-foreground">
+                Phone number is required for WhatsApp notifications
+              </p>
+              {errors.phone && (
+                <p className="text-sm text-red-500">{errors.phone.message}</p>
+              )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

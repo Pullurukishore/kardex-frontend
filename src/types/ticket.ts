@@ -16,6 +16,7 @@ export enum TicketStatus {
   REOPENED = 'REOPENED',
   IN_PROGRESS = 'IN_PROGRESS',
   ON_HOLD = 'ON_HOLD',
+  ESCALATED = 'ESCALATED',
   RESOLVED = 'RESOLVED'
 }
 
@@ -30,6 +31,7 @@ export interface User {
   id: number;
   email: string;
   name?: string;
+  phone?: string;
   role: 'ADMIN' | 'ZONE_USER' | 'SERVICE_PERSON';
   isActive?: boolean;
 }
@@ -100,6 +102,17 @@ export interface Ticket {
   comments?: Comment[];
   statusHistory?: TicketStatusHistory[];
   poRequests?: PORequest[];
+}
+
+export interface TicketFormValues {
+  title: string;
+  description: string;
+  priority: Priority;
+  customerId: string;
+  contactId: string;
+  assetId?: string;
+  zoneId: string;
+  errorDetails?: string;
 }
 
 export interface TicketFormData {

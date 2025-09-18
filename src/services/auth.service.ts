@@ -104,8 +104,8 @@ export const authService = {
             // Clear cookies
             document.cookie = 'accessToken=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';
             document.cookie = 'refreshToken=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';
-            if (window.location.pathname !== '/login') {
-              window.location.href = '/login';
+            if (window.location.pathname !== '/auth/login') {
+              window.location.href = '/auth/login';
             }
           }
           reject(error);

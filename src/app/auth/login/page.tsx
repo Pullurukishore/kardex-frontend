@@ -37,15 +37,30 @@ const loginSchema = z.object({
 type LoginFormValues = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
-  const { login, isLoading, isAuthenticated } = useAuth();
+  const { login, isLoading, isAuthenticated, user } = useAuth();
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loginSuccess, setLoginSuccess] = useState(false);
 
-  // Redirects are handled in AuthContext after login; avoid duplicate push here
+  // Redirect authenticated users to their dashboard
   useEffect(() => {
-    // no-op
-  }, [isAuthenticated]);
+    if (isAuthenticated && user && !isLoading) {
+      const getRoleBasedRedirect = (role: string): string => {
+        switch (role) {
+          case 'ADMIN':
+            return '/admin/dashboard';
+          case 'ZONE_USER':
+            return '/zone/dashboard';
+          case 'SERVICE_PERSON':
+            return '/service-person/dashboard';
+          default:
+            return '/auth/login';
+        }
+      };
+      
+      router.replace(getRoleBasedRedirect(user.role));
+    }
+  }, [isAuthenticated, user, isLoading, router]);
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -56,17 +71,23 @@ export default function LoginPage() {
     if (isSubmitting) return;
     setIsSubmitting(true);
     try {
-      await login(values.email, values.password);
+      const result = await login(values.email, values.password);
       
-      // Show success state
-      setLoginSuccess(true);
-      
-      toast({
-        title: "🎉 Login Successful!",
-        description: "Redirecting...",
-        duration: 1500,
-      });
-      
+      if (result.success) {
+        // Show success state before redirect
+        setLoginSuccess(true);
+        
+        toast({
+          title: "🎉 Login Successful!",
+          description: "Welcome back! Redirecting to dashboard...",
+          duration: 3000,
+        });
+        
+        // Keep success state visible for 2 seconds before redirect
+        setTimeout(() => {
+          setLoginSuccess(false);
+        }, 2000);
+      }
     } catch (error: any) {
       toast({
         title: "Login failed",
@@ -77,9 +98,36 @@ export default function LoginPage() {
       });
     } finally {
       setIsSubmitting(false);
-      setLoginSuccess(false);
     }
   };
+
+  // Show loading screen if user is already authenticated
+  if (isAuthenticated && user && !isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#507295]">
+        <div className="text-center p-8">
+          <div className="mb-6">
+            <h1 className="text-4xl font-bold text-white mb-2">
+              Kardex <span className="text-[#aac01d]">Remstar</span>
+            </h1>
+            <p className="text-white/80">Intelligent Storage Solutions</p>
+          </div>
+          
+          <div className="mb-4">
+            <Loader2 className="h-12 w-12 text-white mx-auto animate-spin" />
+          </div>
+          
+          <p className="text-white/70 text-sm">
+            Welcome back! Redirecting to your dashboard...
+          </p>
+          
+          <div className="mt-4 w-48 h-1 bg-white/20 rounded-full mx-auto overflow-hidden">
+            <div className="h-full bg-gradient-to-r from-white to-[#aac01d] rounded-full animate-pulse"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#507295]">
@@ -99,14 +147,38 @@ export default function LoginPage() {
           {/* Success Overlay */}
           {loginSuccess && (
             <div className="absolute inset-0 bg-white/95 backdrop-blur-sm flex items-center justify-center z-10 rounded-lg">
-              <div className="text-center">
-                <CheckCircle2 className="h-16 w-16 text-green-500 mx-auto mb-4 animate-pulse" />
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">Login Successful!</h3>
-                <p className="text-gray-600">Redirecting to dashboard...</p>
-                <div className="mt-4">
-                  <div className="w-32 h-2 bg-gray-200 rounded-full mx-auto overflow-hidden">
-                    <div className="h-full bg-gradient-to-r from-[#507295] to-[#aac01d] rounded-full animate-pulse"></div>
-                  </div>
+              <div className="text-center p-6">
+                <div className="mb-4">
+                  <CheckCircle2 className="h-20 w-20 text-green-500 mx-auto animate-bounce" />
+                </div>
+                <h3 className="text-2xl font-bold text-gray-900 mb-2">Login Successful!</h3>
+                <p className="text-gray-600 mb-4">Welcome back! Redirecting to your dashboard...</p>
+                <div className="flex items-center justify-center space-x-2">
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {/* Loading Overlay */}
+          {(isLoading || isSubmitting) && !loginSuccess && (
+            <div className="absolute inset-0 bg-white/90 backdrop-blur-sm flex items-center justify-center z-10 rounded-lg">
+              <div className="text-center p-6">
+                <div className="mb-4">
+                  <Loader2 className="h-16 w-16 text-[#507295] mx-auto animate-spin" />
+                </div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                  {isSubmitting ? "Authenticating..." : "Loading..."}
+                </h3>
+                <p className="text-gray-600 text-sm">
+                  {isSubmitting 
+                    ? "Please wait while we verify your credentials..." 
+                    : "Preparing your dashboard..."}
+                </p>
+                <div className="mt-4 w-48 h-1 bg-gray-200 rounded-full mx-auto overflow-hidden">
+                  <div className="h-full bg-gradient-to-r from-[#507295] to-[#aac01d] rounded-full animate-pulse"></div>
                 </div>
               </div>
             </div>
@@ -192,20 +264,22 @@ export default function LoginPage() {
                   loginSuccess 
                     ? "bg-green-500 hover:bg-green-500" 
                     : "bg-[#aac01d] hover:bg-[#96b216]"
-                } text-white`}
+                } text-white min-h-[48px]`}
               >
                 {loginSuccess ? (
                   <>
-                    <CheckCircle2 className="h-4 w-4 mr-2" />
-                    Login Successful!
+                    <CheckCircle2 className="h-5 w-5 mr-2" />
+                    <span className="font-medium">Login Successful!</span>
                   </>
                 ) : isLoading || isSubmitting ? (
                   <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    <span className="animate-pulse">Signing in...</span>
+                    <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                    <span className="font-medium animate-pulse">
+                      {isSubmitting ? "Authenticating..." : "Loading..."}
+                    </span>
                   </>
                 ) : (
-                  "Sign In"
+                  <span className="font-medium">Sign In</span>
                 )}
               </Button>
             </form>

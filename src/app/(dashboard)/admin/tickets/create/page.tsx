@@ -5,59 +5,22 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
+// Removed apiClient usage to avoid auth/shape mismatch for zones fetch
 import { useToast } from '@/components/ui/use-toast';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
-import { 
-  Loader2, 
-  Ticket, 
-  AlertCircle, 
-  Building2, 
-  Users, 
-  MapPin, 
-  Settings, 
-  FileText, 
-  ArrowLeft,
-  CheckCircle,
-  Clock,
-  Zap,
-  Plus,
-  Mail,
-  Phone,
-  User
-} from 'lucide-react';
+import { Form } from '@/components/ui/form';
+import { Loader2 } from 'lucide-react';
 import api from '@/lib/api/axios';
 import { Priority } from '@/types';
 import { Customer, Contact } from '@/types/customer';
 import { Asset } from '@/types/asset';
+import {
+  TicketFormHeader,
+  TicketBasicInfoForm,
+  CustomerSelectionForm,
+  AddContactDialog,
+  AddAssetDialog,
+  TicketFormActions,
+} from '@/components/tickets';
 
 const formSchema = z.object({
   title: z.string().min(3, 'Title must be at least 3 characters'),
@@ -66,20 +29,29 @@ const formSchema = z.object({
   customerId: z.string().min(1, 'Customer is required'),
   contactId: z.string().min(1, 'Contact person is required'),
   assetId: z.string().optional(),
-  zoneId: z.string().min(1, 'Zone is required'),
+  zoneId: z.number({
+    required_error: 'Zone is required',
+    invalid_type_error: 'Please select a zone'
+  }),
   errorDetails: z.string().optional(),
   relatedMachineIds: z.string().optional(),
 });
 
 const contactSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters'),
-  email: z.string().email('Please enter a valid email address'),
   phone: z.string().min(10, 'Phone number must be at least 10 characters'),
-  position: z.string().optional(),
+});
+
+const assetSchema = z.object({
+  machineId: z.string().min(3, 'Machine ID must be at least 3 characters'),
+  model: z.string().min(2, 'Model must be at least 2 characters'),
+  serialNo: z.string().min(3, 'Serial number must be at least 3 characters'),
+  location: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
 type ContactFormValues = z.infer<typeof contactSchema>;
+type AssetFormValues = z.infer<typeof assetSchema>;
 
 export default function CreateTicketPage() {
   const router = useRouter();
@@ -89,22 +61,34 @@ export default function CreateTicketPage() {
   const [isLoadingCustomers, setIsLoadingCustomers] = useState(false);
   const [isAddContactOpen, setIsAddContactOpen] = useState(false);
   const [isCreatingContact, setIsCreatingContact] = useState(false);
+  const [isAddAssetOpen, setIsAddAssetOpen] = useState(false);
+  const [isCreatingAsset, setIsCreatingAsset] = useState(false);
   const [customers, setCustomers] = useState<Array<{
     id: number;
     name: string;
     companyName: string;
+    serviceZoneId: number;
     contacts: Array<{id: number, name: string, email: string, phone: string}>;
     assets: Array<{id: number, model?: string, serialNo?: string, serialNumber?: string}>;
   }>>([]);
   const [contacts, setContacts] = useState<Array<{id: number, name: string, email: string, phone: string}>>([]);
   const [assets, setAssets] = useState<Array<{id: number, model?: string, serialNo?: string, serialNumber?: string}>>([]);
-  const [zones, setZones] = useState<Array<{
+  // Define the zone type with proper servicePersons structure
+  type ZoneType = {
     id: number;
     name: string;
     description?: string;
     isActive: boolean;
-    servicePersons: Array<{id: number, user: {id: number, email: string}}>;
-  }>>([]);
+    servicePersons: Array<{
+      id: number;
+      user: {
+        id: number;
+        email: string;
+      };
+    }>;
+  };
+
+  const [zones, setZones] = useState<ZoneType[]>([]);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -117,9 +101,17 @@ export default function CreateTicketPage() {
     resolver: zodResolver(contactSchema),
     defaultValues: {
       name: '',
-      email: '',
       phone: '',
-      position: '',
+    },
+  });
+
+  const assetForm = useForm<AssetFormValues>({
+    resolver: zodResolver(assetSchema),
+    defaultValues: {
+      machineId: '',
+      model: '',
+      serialNo: '',
+      location: '',
     },
   });
 
@@ -128,15 +120,27 @@ export default function CreateTicketPage() {
     const fetchInitialData = async () => {
       try {
         setIsLoading(true);
-        const zonesRes = await api.get('/service-zones');
-        setZones(zonesRes.data?.data || []);
+        console.log('Fetching service zones...');
+        
+        // Use the shared axios instance that carries cookies and handles refresh
+        const response = await api.get('/service-zones', {
+          params: {
+            limit: 100
+          }
+        });
+
+        // Backend returns { data: ZoneType[], pagination: {...} }
+        const zonesData: ZoneType[] = response.data?.data || [];
+        console.log('Fetched zones:', zonesData);
+        setZones(zonesData);
       } catch (error) {
-        console.error('Error fetching initial data:', error);
+        console.error('Error fetching service zones:', error);
         toast({
           title: 'Error',
-          description: 'Failed to load form data. Please try again.',
+          description: 'Failed to load service zones. Please try again.',
           variant: 'destructive',
         });
+        setZones([]);
       } finally {
         setIsLoading(false);
       }
@@ -149,7 +153,7 @@ export default function CreateTicketPage() {
   const zoneId = form.watch('zoneId');
   useEffect(() => {
     const fetchZoneCustomers = async () => {
-      if (!zoneId) {
+      if (zoneId === undefined || zoneId === null) {
         setCustomers([]);
         setContacts([]);
         setAssets([]);
@@ -234,6 +238,67 @@ export default function CreateTicketPage() {
     }
   }, [customerId, form, customers, toast]);
 
+  // Handle asset creation
+  const handleCreateAsset = async (values: AssetFormValues) => {
+    if (!customerId) {
+      toast({
+        title: 'Error',
+        description: 'Please select a customer first',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      setIsCreatingAsset(true);
+      
+      const payload = {
+        ...values,
+        customerId: parseInt(customerId),
+      };
+
+      const response = await api.post('/assets', payload);
+      const newAsset = response.data;
+      
+      // Update the assets list
+      setAssets(prev => [...prev, newAsset]);
+      
+      // Update the customers array to include the new asset
+      setCustomers(prev => prev.map(customer => 
+        customer.id.toString() === customerId 
+          ? { ...customer, assets: [...customer.assets, newAsset] }
+          : customer
+      ));
+      
+      // Auto-select the newly created asset
+      form.setValue('assetId', newAsset.id.toString());
+      
+      // Reset the asset form and close dialog
+      assetForm.reset();
+      setIsAddAssetOpen(false);
+      
+      toast({
+        title: 'Success',
+        description: `Asset "${newAsset.model}" has been created and selected.`,
+      });
+    } catch (error: any) {
+      console.error('Error creating asset:', error);
+      
+      let errorMessage = 'Failed to create asset. Please try again.';
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      }
+      
+      toast({
+        title: 'Error',
+        description: errorMessage,
+        variant: 'destructive',
+      });
+    } finally {
+      setIsCreatingAsset(false);
+    }
+  };
+
   // Handle contact creation
   const handleCreateContact = async (values: ContactFormValues) => {
     if (!customerId) {
@@ -295,27 +360,27 @@ export default function CreateTicketPage() {
     }
   };
 
-  const onSubmit = async (values: FormValues) => {
+  const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
       setIsSubmitting(true);
       
-      const payload = {
+      const response = await api.post('/tickets', {
         ...values,
+        // Convert string IDs to numbers for the API
         customerId: parseInt(values.customerId),
         contactId: parseInt(values.contactId),
         assetId: values.assetId ? parseInt(values.assetId) : undefined,
-        zoneId: parseInt(values.zoneId),
+        // zoneId is already a number, no need to parse
         relatedMachineIds: values.relatedMachineIds 
           ? values.relatedMachineIds.split(',').map((id: string) => id.trim())
           : undefined,
-      };
+      });
 
-      const response = await api.post('/tickets', payload);
       const ticketData = response.data;
       
       // Get customer and zone names for better success message
-      const selectedCustomer = customers.find(c => c.id.toString() === values.customerId);
-      const selectedZone = zones.find(z => z.id.toString() === values.zoneId);
+      const selectedCustomer = customers.find(c => c.id === parseInt(values.customerId));
+      const selectedZone = zones.find(z => z.id === values.zoneId);
       
       toast({
         title: '🎉 Ticket Created Successfully!',
@@ -373,595 +438,53 @@ export default function CreateTicketPage() {
   }
 
   return (
-    <div className="container mx-auto py-6 space-y-6">
-      {/* Enhanced Header with Gradient */}
-      <div className="relative overflow-hidden rounded-lg bg-gradient-to-r from-indigo-600 via-purple-600 to-blue-800 p-6 text-white">
-        <div className="absolute inset-0 bg-black/20"></div>
-        <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/20 to-purple-500/20"></div>
-        <div className="relative flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <div className="h-12 w-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
-              <Ticket className="h-6 w-6 text-white" />
-            </div>
-            <div>
-              <h1 className="text-3xl font-bold mb-2">Create New Ticket</h1>
-              <p className="text-indigo-100">
-                Submit a new support request with detailed information for faster resolution
-              </p>
-            </div>
-          </div>
-          <Button 
-            variant="outline"
-            onClick={() => router.back()}
-            className="bg-white/10 border-white/20 text-white hover:bg-white/20 backdrop-blur-sm"
-          >
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back
-          </Button>
-        </div>
-      </div>
+    <>
+      <TicketFormHeader 
+        onBack={() => router.back()}
+        isSubmitting={isSubmitting}
+      />
       
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-          <Card className="shadow-lg border-0 bg-gradient-to-br from-white to-gray-50">
-            <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-t-lg border-b">
-              <div className="flex items-center space-x-3">
-                <div className="h-8 w-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
-                  <FileText className="h-4 w-4 text-white" />
-                </div>
-                <div>
-                  <CardTitle className="text-lg text-gray-800">Ticket Information</CardTitle>
-                  <CardDescription>Basic details about the support ticket</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-6 p-6">
-              <FormField
-                control={form.control}
-                name="title"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Title</FormLabel>
-                    <FormControl>
-                      <Input 
-                        placeholder="Enter ticket title" 
-                        {...field} 
-                        disabled={isSubmitting}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={form.control}
-                name="description"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Description</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        placeholder="Describe the issue in detail..."
-                        className="min-h-[120px]"
-                        disabled={isSubmitting}
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <FormField
-                  control={form.control}
-                  name="priority"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="flex items-center space-x-2">
-                        <AlertCircle className="h-4 w-4 text-orange-500" />
-                        <span>Priority</span>
-                      </FormLabel>
-                      <Select 
-                        onValueChange={field.onChange} 
-                        value={field.value}
-                        disabled={isSubmitting}
-                      >
-                        <FormControl>
-                          <SelectTrigger className="focus:ring-2 focus:ring-orange-500 focus:border-orange-500">
-                            <SelectValue placeholder="Select priority" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="LOW" className="text-green-600">
-                            <div className="flex items-center space-x-2">
-                              <div className="h-2 w-2 rounded-full bg-green-500"></div>
-                              <span>Low Priority</span>
-                            </div>
-                          </SelectItem>
-                          <SelectItem value="MEDIUM" className="text-yellow-600">
-                            <div className="flex items-center space-x-2">
-                              <div className="h-2 w-2 rounded-full bg-yellow-500"></div>
-                              <span>Medium Priority</span>
-                            </div>
-                          </SelectItem>
-                          <SelectItem value="HIGH" className="text-red-600">
-                            <div className="flex items-center space-x-2">
-                              <div className="h-2 w-2 rounded-full bg-red-500"></div>
-                              <span>High Priority</span>
-                            </div>
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <FormField
-                  control={form.control}
-                  name="zoneId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="flex items-center space-x-2">
-                        <MapPin className="h-4 w-4 text-blue-500" />
-                        <span>Service Zone</span>
-                      </FormLabel>
-                      <Select 
-                        onValueChange={field.onChange} 
-                        value={field.value}
-                        disabled={isSubmitting || zones.length === 0}
-                      >
-                        <FormControl>
-                          <SelectTrigger className="focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                            <SelectValue placeholder={zones.length === 0 ? 'No zones available' : 'Select service zone'} />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {Array.isArray(zones) && zones.length > 0 ? (
-                            zones.filter(zone => zone.isActive).map((zone) => (
-                              <SelectItem key={zone.id} value={zone.id.toString()}>
-                                <div className="flex items-center space-x-2">
-                                  <MapPin className="h-3 w-3 text-blue-500" />
-                                  <span>{zone.name}</span>
-                                </div>
-                              </SelectItem>
-                            ))
-                          ) : (
-                            <SelectItem value="" disabled>
-                              No active zones available
-                            </SelectItem>
-                          )}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-            </CardContent>
-          </Card>
+          <TicketBasicInfoForm 
+            control={form.control}
+            zones={zones}
+            isSubmitting={isSubmitting}
+          />
           
-          <Card className="shadow-lg border-0 bg-gradient-to-br from-white to-gray-50">
-            <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-t-lg border-b">
-              <div className="flex items-center space-x-3">
-                <div className="h-8 w-8 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center">
-                  <Building2 className="h-4 w-4 text-white" />
-                </div>
-                <div>
-                  <CardTitle className="text-lg text-gray-800">Customer Information</CardTitle>
-                  <CardDescription>Details about the customer and their assets</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-6 p-6">
-              <FormField
-                control={form.control}
-                name="customerId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="flex items-center space-x-2">
-                      <Building2 className="h-4 w-4 text-green-500" />
-                      <span>Customer</span>
-                      {isLoadingCustomers && <Loader2 className="h-3 w-3 animate-spin text-green-500" />}
-                    </FormLabel>
-                    <Select 
-                      onValueChange={field.onChange} 
-                      value={field.value}
-                      disabled={isSubmitting || !zoneId || isLoadingCustomers || customers.length === 0}
-                    >
-                      <FormControl>
-                        <SelectTrigger className="focus:ring-2 focus:ring-green-500 focus:border-green-500">
-                          <SelectValue placeholder={
-                            !zoneId 
-                              ? 'Select a service zone first' 
-                              : isLoadingCustomers 
-                                ? 'Loading customers...' 
-                                : customers.length === 0 
-                                  ? 'No customers available in this zone' 
-                                  : 'Select customer'
-                          } />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {customers.map((customer) => (
-                          <SelectItem key={customer.id} value={customer.id.toString()}>
-                            <div className="flex items-center space-x-2">
-                              <Building2 className="h-3 w-3 text-green-500" />
-                              <span>{customer.companyName}</span>
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <FormField
-                  control={form.control}
-                  name="contactId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="flex items-center space-x-2">
-                        <Users className="h-4 w-4 text-purple-500" />
-                        <span>Contact Person</span>
-                      </FormLabel>
-                      <div className="flex gap-2">
-                        <Select 
-                          onValueChange={field.onChange} 
-                          value={field.value}
-                          disabled={!customerId || contacts.length === 0 || isSubmitting || isLoadingCustomers}
-                        >
-                          <FormControl>
-                            <SelectTrigger className="focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
-                              <SelectValue 
-                                placeholder={
-                                  !customerId 
-                                    ? 'Select a customer first' 
-                                    : contacts.length === 0 
-                                      ? 'No contacts available' 
-                                      : 'Select contact person'
-                                } 
-                              />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {contacts.map((contact) => (
-                              <SelectItem key={contact.id} value={contact.id.toString()}>
-                                <div className="flex items-center space-x-2">
-                                  <Users className="h-3 w-3 text-purple-500" />
-                                  <span>{contact.name} ({contact.email})</span>
-                                </div>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        {customerId && (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setIsAddContactOpen(true)}
-                            disabled={isSubmitting || isLoadingCustomers}
-                            className="flex-shrink-0 border-purple-200 text-purple-600 hover:bg-purple-50 hover:border-purple-300"
-                          >
-                            <Plus className="h-4 w-4 mr-2" />
-                            Add New Contact
-                          </Button>
-                        )}
-                      </div>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <FormField
-                  control={form.control}
-                  name="assetId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="flex items-center space-x-2">
-                        <Settings className="h-4 w-4 text-indigo-500" />
-                        <span>Asset (Optional)</span>
-                      </FormLabel>
-                      <Select 
-                        onValueChange={field.onChange} 
-                        value={field.value || ''}
-                        disabled={!customerId || assets.length === 0 || isSubmitting || isLoadingCustomers}
-                      >
-                        <FormControl>
-                          <SelectTrigger className="focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
-                            <SelectValue 
-                              placeholder={
-                                !customerId 
-                                  ? 'Select a customer first' 
-                                  : assets.length === 0 
-                                    ? 'No assets available' 
-                                    : 'Select asset (optional)'
-                              } 
-                            />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="">
-                            <div className="flex items-center space-x-2">
-                              <div className="h-3 w-3 rounded-full border-2 border-gray-300"></div>
-                              <span>None</span>
-                            </div>
-                          </SelectItem>
-                          {assets.map((asset) => (
-                            <SelectItem key={asset.id} value={asset.id.toString()}>
-                              <div className="flex items-center space-x-2">
-                                <Settings className="h-3 w-3 text-indigo-500" />
-                                <span>{asset.model} (SN: {asset.serialNumber || asset.serialNo || 'N/A'})</span>
-                              </div>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-            </CardContent>
-          </Card>
+          <CustomerSelectionForm 
+            control={form.control}
+            customers={customers}
+            contacts={contacts}
+            assets={assets}
+            zoneId={zoneId !== undefined ? Number(zoneId) : undefined}
+            customerId={customerId}
+            isSubmitting={isSubmitting}
+            isLoadingCustomers={isLoadingCustomers}
+            onAddContactClick={() => setIsAddContactOpen(true)}
+            onAddAssetClick={() => setIsAddAssetOpen(true)}
+          />
           
-          <Card className="shadow-lg border-0 bg-gradient-to-br from-white to-gray-50">
-            <CardHeader className="bg-gradient-to-r from-orange-50 to-amber-50 rounded-t-lg border-b">
-              <div className="flex items-center space-x-3">
-                <div className="h-8 w-8 rounded-full bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center">
-                  <Settings className="h-4 w-4 text-white" />
-                </div>
-                <div>
-                  <CardTitle className="text-lg text-gray-800">Additional Information</CardTitle>
-                  <CardDescription>Additional details that might help resolve the issue</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-6 p-6">
-              <FormField
-                control={form.control}
-                name="errorDetails"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="flex items-center space-x-2">
-                      <AlertCircle className="h-4 w-4 text-red-500" />
-                      <span>Error Details (Optional)</span>
-                    </FormLabel>
-                    <FormControl>
-                      <Textarea
-                        placeholder="Enter any error messages, codes, or technical details..."
-                        className="min-h-[100px] focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                        disabled={isSubmitting}
-                        {...field}
-                        value={field.value || ''}
-                      />
-                    </FormControl>
-                    <FormDescription className="text-gray-500">
-                      Include any error messages, codes, or technical details that might help with diagnosis
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={form.control}
-                name="relatedMachineIds"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="flex items-center space-x-2">
-                      <Zap className="h-4 w-4 text-yellow-500" />
-                      <span>Related Machine IDs (Optional)</span>
-                    </FormLabel>
-                    <FormControl>
-                      <Input 
-                        placeholder="e.g., MACHINE001, MACHINE002, MACHINE003"
-                        className="focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500"
-                        disabled={isSubmitting}
-                        {...field}
-                        value={field.value || ''}
-                      />
-                    </FormControl>
-                    <FormDescription className="text-gray-500">
-                      Separate multiple machine IDs with commas if this issue affects multiple machines
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </CardContent>
-          </Card>
-          
-          {/* Enhanced Action Buttons */}
-          <Card className="shadow-lg border-0 bg-gradient-to-br from-white to-gray-50">
-            <CardContent className="p-6">
-              <div className="flex flex-col-reverse sm:flex-row sm:justify-between sm:items-center gap-4">
-                <div className="flex items-center space-x-2 text-sm text-gray-500">
-                  <CheckCircle className="h-4 w-4 text-green-500" />
-                  <span>All required fields will be validated before submission</span>
-                </div>
-                <div className="flex flex-col-reverse sm:flex-row gap-3">
-                  <Button 
-                    type="button" 
-                    variant="outline" 
-                    onClick={() => router.back()}
-                    disabled={isSubmitting}
-                    className="hover:bg-gray-50 border-gray-300"
-                  >
-                    <ArrowLeft className="mr-2 h-4 w-4" />
-                    Cancel
-                  </Button>
-                  <Button 
-                    type="submit" 
-                    disabled={isSubmitting}
-                    className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 shadow-lg text-white px-8"
-                  >
-                    {isSubmitting ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Creating Ticket...
-                      </>
-                    ) : (
-                      <>
-                        <Ticket className="mr-2 h-4 w-4" />
-                        Create Ticket
-                      </>
-                    )}
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <TicketFormActions 
+            isSubmitting={isSubmitting}
+            onCancel={() => router.back()}
+          />
         </form>
       </Form>
 
-      {/* Add Contact Dialog - Outside the main form to avoid focus issues */}
-      <Dialog open={isAddContactOpen} onOpenChange={setIsAddContactOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <div className="flex items-center space-x-3">
-              <div className="h-10 w-10 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center">
-                <User className="h-5 w-5 text-white" />
-              </div>
-              <div>
-                <DialogTitle>Add New Contact</DialogTitle>
-                <DialogDescription>
-                  Create a new contact for the selected customer
-                </DialogDescription>
-              </div>
-            </div>
-          </DialogHeader>
-          <Form {...contactForm}>
-            <form onSubmit={contactForm.handleSubmit(handleCreateContact)} className="space-y-4">
-              <FormField
-                control={contactForm.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="flex items-center space-x-2">
-                      <User className="h-4 w-4 text-purple-500" />
-                      <span>Full Name</span>
-                    </FormLabel>
-                    <FormControl>
-                      <Input 
-                        placeholder="Enter contact's full name" 
-                        {...field} 
-                        disabled={isCreatingContact}
-                        className="focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={contactForm.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="flex items-center space-x-2">
-                      <Mail className="h-4 w-4 text-blue-500" />
-                      <span>Email Address</span>
-                    </FormLabel>
-                    <FormControl>
-                      <Input 
-                        type="email"
-                        placeholder="contact@company.com" 
-                        {...field} 
-                        disabled={isCreatingContact}
-                        className="focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={contactForm.control}
-                name="phone"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="flex items-center space-x-2">
-                      <Phone className="h-4 w-4 text-green-500" />
-                      <span>Phone Number</span>
-                    </FormLabel>
-                    <FormControl>
-                      <Input 
-                        placeholder="+1 (555) 123-4567" 
-                        {...field} 
-                        disabled={isCreatingContact}
-                        className="focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={contactForm.control}
-                name="position"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="flex items-center space-x-2">
-                      <Building2 className="h-4 w-4 text-orange-500" />
-                      <span>Position (Optional)</span>
-                    </FormLabel>
-                    <FormControl>
-                      <Input 
-                        placeholder="e.g., IT Manager, Operations Director" 
-                        {...field} 
-                        disabled={isCreatingContact}
-                        className="focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <DialogFooter className="gap-2">
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  onClick={() => {
-                    setIsAddContactOpen(false);
-                    contactForm.reset();
-                  }}
-                  disabled={isCreatingContact}
-                >
-                  Cancel
-                </Button>
-                <Button 
-                  type="submit" 
-                  disabled={isCreatingContact}
-                  className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700"
-                >
-                  {isCreatingContact ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Creating...
-                    </>
-                  ) : (
-                    <>
-                      <Plus className="mr-2 h-4 w-4" />
-                      Create Contact
-                    </>
-                  )}
-                </Button>
-              </DialogFooter>
-            </form>
-          </Form>
-        </DialogContent>
-      </Dialog>
-    </div>
+      <AddContactDialog 
+        open={isAddContactOpen}
+        onOpenChange={setIsAddContactOpen}
+        onSubmit={handleCreateContact}
+        isCreating={isCreatingContact}
+      />
+
+      <AddAssetDialog 
+        open={isAddAssetOpen}
+        onOpenChange={setIsAddAssetOpen}
+        onSubmit={handleCreateAsset}
+        isCreating={isCreatingAsset}
+      />
+    </>
   );
 }

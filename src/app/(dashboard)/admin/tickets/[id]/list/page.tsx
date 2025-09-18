@@ -14,7 +14,8 @@ import {
   CheckCircle,
   UserPlus,
   Wrench,
-  Pencil
+  Pencil,
+  Upload
 } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { Ticket } from '@/types/ticket';
@@ -25,11 +26,11 @@ import { TicketActivity } from '@/components/tickets/TicketActivity';
 import { TicketComments } from '@/components/tickets/TicketComments';
 import { TicketDetails } from '@/components/tickets/TicketDetails';
 import { AssignTicketDialog } from '@/components/tickets/AssignTicketDialog';
-import { StatusChangeDialog } from '@/components/tickets/StatusChangeDialog';
+import { StatusChangeDialog, TicketStatus, TicketStatusType } from '@/components/tickets/StatusChangeDialog';
+import { TicketReports } from '@/components/tickets/TicketReports';
 import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
-type TicketStatus = 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED' | 'CANCELLED' | 'PENDING' | 'ASSIGNED' | 'REOPENED' | 'ON_HOLD';
 
 export default function TicketDetailPage() {
   const { id } = useParams();
@@ -37,8 +38,9 @@ export default function TicketDetailPage() {
   const { toast } = useToast();
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'details' | 'activity' | 'comments'>('details');
+  const [activeTab, setActiveTab] = useState<'details' | 'activity' | 'comments' | 'reports'>('details');
   const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
+  const [assignmentStep, setAssignmentStep] = useState<'ZONE_USER' | 'SERVICE_PERSON'>('ZONE_USER');
   const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false);
 
   const fetchTicketDetails = async () => {
@@ -155,21 +157,36 @@ export default function TicketDetailPage() {
 
 
   return (
-    <div className="container mx-auto p-4">
-      <div className="flex items-center mb-6">
-        <Button variant="ghost" size="icon" onClick={() => router.back()}>
-          <span className="sr-only">Go back</span>
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="m12 19-7-7 7-7"/>
-            <path d="M19 12H5"/>
-          </svg>
-        </Button>
+    <div className="p-4">
+      {/* Ticket Header - Moved to proper position */}
+      <div className="mb-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <Button variant="ghost" size="icon" onClick={() => router.back()}>
+              <span className="sr-only">Go back</span>
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="m12 19-7-7 7-7"/>
+                <path d="M19 12H5"/>
+              </svg>
+            </Button>
+            <h1 className="text-2xl font-bold tracking-tight">
+              Ticket #{ticket.id}
+            </h1>
+          </div>
+          <div className="flex items-center gap-2">
+            <StatusBadge status={ticket.status} />
+            <span className="text-sm text-muted-foreground">
+              Created on {format(new Date(ticket.createdAt), 'MMM d, yyyy')}
+            </span>
+          </div>
+        </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <div className="md:col-span-2 space-y-4">
-          <Card>
-            <CardHeader className="pb-3">
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* Left Column - Main Ticket Info */}
+        <div className="space-y-6">
+          <Card className="shadow-sm border-border/50 hover:shadow-md transition-shadow duration-200">
+            <CardHeader className="pb-3 bg-gradient-to-r from-slate-50 to-slate-100/50 rounded-t-lg border-b">
               <div className="flex justify-between items-start">
                 <div>
                   <div className="flex items-center space-x-3">
@@ -256,11 +273,11 @@ export default function TicketDetailPage() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
+          <Card className="shadow-sm border-border/50 hover:shadow-md transition-shadow duration-200">
+            <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50/50 rounded-t-lg border-b">
               <div className="flex items-center space-x-2">
-                <Activity className="h-5 w-5" />
-                <CardTitle>Activity</CardTitle>
+                <Activity className="h-5 w-5 text-blue-600" />
+                <CardTitle className="text-blue-900">Activity</CardTitle>
               </div>
             </CardHeader>
             <CardContent>
@@ -269,11 +286,12 @@ export default function TicketDetailPage() {
           </Card>
         </div>
 
-        <div className="space-y-4">
-          <Card>
-            <CardHeader>
+        {/* Right Column - Sidebar Content */}
+        <div className="space-y-6">
+          <Card className="shadow-sm border-border/50 hover:shadow-md transition-shadow duration-200">
+            <CardHeader className="bg-gradient-to-r from-amber-50 to-orange-50/50 rounded-t-lg border-b">
               <div className="flex items-center justify-between">
-                <CardTitle>Details</CardTitle>
+                <CardTitle className="text-amber-900">Details</CardTitle>
                 <div className="flex items-center space-x-2">
                   <Button 
                     variant={activeTab === 'details' ? 'default' : 'outline'} 
@@ -291,6 +309,14 @@ export default function TicketDetailPage() {
                     <MessageSquare className="h-4 w-4 mr-2" />
                     Comments
                   </Button>
+                  <Button 
+                    variant={activeTab === 'reports' ? 'default' : 'outline'} 
+                    size="sm"
+                    onClick={() => setActiveTab('reports')}
+                  >
+                    <Upload className="h-4 w-4 mr-2" />
+                    Reports
+                  </Button>
                 </div>
               </div>
             </CardHeader>
@@ -304,46 +330,60 @@ export default function TicketDetailPage() {
                     console.error('Error updating status:', error);
                   }
                 }} />
+              ) : activeTab === 'reports' ? (
+                <TicketReports ticketId={ticket.id.toString()} />
               ) : (
                 <TicketComments ticketId={ticket.id} />
               )}
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Assignment</CardTitle>
+          <Card className="shadow-sm border-border/50 hover:shadow-md transition-shadow duration-200">
+            <CardHeader className="bg-gradient-to-r from-emerald-50 to-teal-50/50 rounded-t-lg border-b">
+              <CardTitle className="text-emerald-900">Assignment</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <h1 className="text-2xl font-bold tracking-tight">
-                    Ticket #{ticket.id}
-                  </h1>
-                  <div className="flex items-center gap-2">
-                    <StatusBadge status={ticket.status} />
-                    <span className="text-sm text-muted-foreground">
-                      Created on {format(new Date(ticket.createdAt), 'MMM d, yyyy')}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-            <Separator />
-
-              <div className="space-y-2">
                 <h3 className="font-medium">Assignment</h3>
                 <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">Assigned To</span>
+                  <span className="text-sm text-muted-foreground">Zone User</span>
                   <div className="flex items-center">
-                    {ticket.assignedTo ? (
+                    {ticket.subOwner && ticket.subOwner.role === 'ZONE_USER' ? (
                       <>
                         <Avatar className="h-5 w-5 mr-2">
-                          <AvatarFallback>
-                            {ticket.assignedTo.name?.charAt(0) || 'U'}
+                          <AvatarFallback className="bg-emerald-100 text-emerald-700">
+                            {ticket.subOwner.name?.charAt(0) || 'U'}
                           </AvatarFallback>
                         </Avatar>
-                        <span>{ticket.assignedTo.name || ticket.assignedTo.email}</span>
+                        <div className="flex flex-col">
+                          <span>{ticket.subOwner.name || 'No name'}</span>
+                          {ticket.subOwner.phone && (
+                            <span className="text-xs text-muted-foreground">{ticket.subOwner.phone}</span>
+                          )}
+                        </div>
+                      </>
+                    ) : (
+                      <span className="text-muted-foreground">Unassigned</span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Service Person</span>
+                  <div className="flex items-center">
+                    {ticket.assignedTo && ticket.assignedTo.role === 'SERVICE_PERSON' ? (
+                      <>
+                        <Avatar className="h-5 w-5 mr-2">
+                          <AvatarFallback className="bg-blue-100 text-blue-700">
+                            {ticket.assignedTo.name?.charAt(0) || 'S'}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex flex-col">
+                          <span>{ticket.assignedTo.name || 'No name'}</span>
+                          {ticket.assignedTo.phone && (
+                            <span className="text-xs text-muted-foreground">{ticket.assignedTo.phone}</span>
+                          )}
+                        </div>
                       </>
                     ) : (
                       <span className="text-muted-foreground">Unassigned</span>
@@ -361,7 +401,12 @@ export default function TicketDetailPage() {
 
                 <div className="flex justify-between">
                   <span className="text-sm text-muted-foreground">Created By</span>
-                  <span>{ticket.owner?.email || 'System'}</span>
+                  <div className="flex flex-col">
+                    <span>{ticket.owner?.name || 'System'}</span>
+                    {ticket.owner?.phone && (
+                      <span className="text-xs text-muted-foreground">{ticket.owner.phone}</span>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -370,6 +415,7 @@ export default function TicketDetailPage() {
                 <Button 
                   onClick={() => {
                     // Open dialog for zone user assignment
+                    setAssignmentStep('ZONE_USER');
                     setIsAssignDialogOpen(true);
                   }}
                   disabled={!ticket}
@@ -399,6 +445,7 @@ export default function TicketDetailPage() {
                         });
                         return;
                       }
+                      setAssignmentStep('SERVICE_PERSON');
                       setIsAssignDialogOpen(true);
                     } catch (error) {
                       console.error('Error fetching service persons:', error);
@@ -427,9 +474,9 @@ export default function TicketDetailPage() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Status History</CardTitle>
+          <Card className="shadow-sm border-border/50 hover:shadow-md transition-shadow duration-200">
+            <CardHeader className="bg-gradient-to-r from-purple-50 to-pink-50/50 rounded-t-lg border-b">
+              <CardTitle className="text-purple-900">Status History</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
@@ -488,6 +535,19 @@ export default function TicketDetailPage() {
         ticketId={ticket.id}
         onSuccess={fetchTicketDetails}
         zoneId={ticket.zone?.id}
+        initialStep={assignmentStep}
+        currentAssignedZoneUser={ticket.subOwner && ticket.subOwner.role === 'ZONE_USER' ? {
+          id: ticket.subOwner.id.toString(),
+          name: ticket.subOwner.name || 'No name',
+          email: ticket.subOwner.email,
+          phone: ticket.subOwner.phone || undefined
+        } : null}
+        currentAssignedServicePerson={ticket.assignedTo && ticket.assignedTo.role === 'SERVICE_PERSON' ? {
+          id: ticket.assignedTo.id.toString(),
+          name: ticket.assignedTo.name || 'No name',
+          email: ticket.assignedTo.email,
+          phone: ticket.assignedTo.phone || undefined
+        } : null}
       />
       
       <StatusChangeDialog

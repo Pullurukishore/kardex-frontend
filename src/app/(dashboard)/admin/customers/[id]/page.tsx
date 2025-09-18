@@ -343,7 +343,6 @@ export default function CustomerDetailPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Name</TableHead>
-                      <TableHead>Email</TableHead>
                       <TableHead>Phone</TableHead>
                       <TableHead>Role</TableHead>
                     </TableRow>
@@ -352,14 +351,6 @@ export default function CustomerDetailPage() {
                     {customer.contacts.map((contact: Contact) => (
                       <TableRow key={contact.id}>
                         <TableCell className="font-medium">{contact.name}</TableCell>
-                        <TableCell>
-                          <a 
-                            href={`mailto:${contact.email}`}
-                            className="hover:underline hover:text-primary"
-                          >
-                            {contact.email}
-                          </a>
-                        </TableCell>
                         <TableCell>
                           {contact.phone ? (
                             <a 

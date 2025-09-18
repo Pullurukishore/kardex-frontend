@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { 
   Dialog, 
   DialogContent, 
@@ -31,7 +32,8 @@ import {
   Mail, 
   CheckCircle,
   ArrowRight,
-  Zap
+  Zap,
+  Search
 } from 'lucide-react';
 import api from '@/lib/api/axios';
 
@@ -39,6 +41,7 @@ type User = {
   id: string;
   name: string;
   email: string;
+  phone?: string;
   type: 'ZONE_USER' | 'SERVICE_PERSON';
   serviceZones?: Array<{ 
     userId: number;
@@ -58,19 +61,46 @@ type AssignTicketDialogProps = {
   ticketId: number | null;
   onSuccess: () => void;
   zoneId?: number;
+  initialStep?: AssignmentStep;
+  currentAssignedZoneUser?: {
+    id: string;
+    name: string;
+    email: string;
+    phone?: string;
+  } | null;
+  currentAssignedServicePerson?: {
+    id: string;
+    name: string;
+    email: string;
+    phone?: string;
+  } | null;
 };
 
 type AssignmentStep = 'ZONE_USER' | 'SERVICE_PERSON';
 
-export function AssignTicketDialog({ open, onOpenChange, ticketId, onSuccess, zoneId }: AssignTicketDialogProps) {
+export function AssignTicketDialog({ open, onOpenChange, ticketId, onSuccess, zoneId, initialStep = 'ZONE_USER', currentAssignedZoneUser, currentAssignedServicePerson }: AssignTicketDialogProps) {
   if (ticketId === null) return null;
   const [loading, setLoading] = useState(false);
   const [zoneUsers, setZoneUsers] = useState<User[]>([]);
   const [servicePersons, setServicePersons] = useState<User[]>([]);
   const [selectedUserId, setSelectedUserId] = useState('');
-  const [currentStep, setCurrentStep] = useState<AssignmentStep>('ZONE_USER');
+  const [currentStep, setCurrentStep] = useState<AssignmentStep>(initialStep);
   const [selectedZoneUserId, setSelectedZoneUserId] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
   const { toast } = useToast();
+
+  // Pre-select current assigned person when dialog opens
+  useEffect(() => {
+    if (open) {
+      if (currentStep === 'ZONE_USER' && currentAssignedZoneUser) {
+        setSelectedUserId(currentAssignedZoneUser.id);
+      } else if (currentStep === 'SERVICE_PERSON' && currentAssignedServicePerson) {
+        setSelectedUserId(currentAssignedServicePerson.id);
+      } else {
+        setSelectedUserId('');
+      }
+    }
+  }, [open, currentStep, currentAssignedZoneUser, currentAssignedServicePerson]);
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -88,6 +118,7 @@ export function AssignTicketDialog({ open, onOpenChange, ticketId, onSuccess, zo
               id: user.id.toString(),
               name: user.name || user.email.split('@')[0],
               email: user.email,
+              phone: user.phone,
               type: 'ZONE_USER' as const,
               serviceZones: user.serviceZones || []
             }))
@@ -99,16 +130,24 @@ export function AssignTicketDialog({ open, onOpenChange, ticketId, onSuccess, zo
           const servicePersonsRes = await api.get('/service-persons');
           // Handle both array response and paginated response
           const personsData = servicePersonsRes.data.data || servicePersonsRes.data;
-          setServicePersons(personsData
-            .filter((user: any) => user.role === 'SERVICE_PERSON')
-            .map((user: any) => ({
+          
+          // Debug: Log the response to see what we're getting
+          console.log('Service persons response:', servicePersonsRes.data);
+          console.log('Persons data:', personsData);
+          
+          if (Array.isArray(personsData)) {
+            setServicePersons(personsData.map((user: any) => ({
               id: user.id.toString(),
               name: user.name || user.email.split('@')[0],
               email: user.email,
+              phone: user.phone,
               type: 'SERVICE_PERSON' as const,
               serviceZones: user.serviceZones || []
-            }))
-          );
+            })));
+          } else {
+            console.error('Expected array but got:', typeof personsData, personsData);
+            setServicePersons([]);
+          }
         }
       } catch (error) {
         console.error('Error fetching users:', error);
@@ -124,10 +163,8 @@ export function AssignTicketDialog({ open, onOpenChange, ticketId, onSuccess, zo
 
     if (open) {
       // Reset state when dialog is opened
-      if (!open) {
-        setCurrentStep('ZONE_USER');
-        setSelectedZoneUserId('');
-      }
+      setCurrentStep(initialStep);
+      setSelectedZoneUserId('');
       fetchUsers();
       setSelectedUserId('');
     }
@@ -174,16 +211,16 @@ export function AssignTicketDialog({ open, onOpenChange, ticketId, onSuccess, zo
         note: 'Assigned to zone user'
       });
       
-      // Update status to IN_PROCESS
+      // Update status to ASSIGNED
       await api.patch(`/tickets/${ticketId}/status`, {
-        status: 'IN_PROCESS',
-        comments: 'Ticket assigned to zone user and marked as In Process'
+        status: 'ASSIGNED',
+        comments: 'Ticket assigned to zone user'
       });
       
       if (response.data) {
         toast({
           title: 'Success',
-          description: 'Ticket assigned to zone user and status updated to In Process',
+          description: 'Ticket assigned to zone user and status updated to Assigned',
         });
         onSuccess();
         onOpenChange(false);
@@ -210,10 +247,10 @@ export function AssignTicketDialog({ open, onOpenChange, ticketId, onSuccess, zo
   };
 
   const handleAssign = async () => {
-    if (!selectedZoneUserId || !selectedUserId) {
+    if (!selectedUserId) {
       toast({
         title: 'Error',
-        description: 'Please select both zone user and service person',
+        description: 'Please select a service person',
         variant: 'destructive',
       });
       return;
@@ -222,15 +259,9 @@ export function AssignTicketDialog({ open, onOpenChange, ticketId, onSuccess, zo
     try {
       setLoading(true);
       
-      // First assign to zone user
-      await api.patch(`/tickets/${ticketId}/assign-zone-user`, {
-        zoneUserId: selectedZoneUserId,
-        note: 'Assigned to zone user'
-      });
-      
-      // Then assign to service person
+      // Directly assign to service person
       const response = await api.patch(`/tickets/${ticketId}/assign`, {
-        userId: selectedUserId,
+        assignedToId: parseInt(selectedUserId),
         note: 'Assigned to service person'
       });
       
@@ -314,6 +345,49 @@ export function AssignTicketDialog({ open, onOpenChange, ticketId, onSuccess, zo
             </div>
           </div>
 
+          {/* Current Assignment */}
+          {(currentStep === 'ZONE_USER' && currentAssignedZoneUser) && (
+            <Card className="border-emerald-200 bg-emerald-50">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-full bg-emerald-100">
+                      <CheckCircle className="h-4 w-4 text-emerald-600" />
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium text-emerald-800">Currently Assigned Zone User</div>
+                      <div className="text-xs text-emerald-600">{currentAssignedZoneUser.name}{currentAssignedZoneUser.phone ? ` - ${currentAssignedZoneUser.phone}` : ''}</div>
+                    </div>
+                  </div>
+                  <Badge variant="secondary" className="bg-emerald-100 text-emerald-700">
+                    Current
+                  </Badge>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {(currentStep === 'SERVICE_PERSON' && currentAssignedServicePerson) && (
+            <Card className="border-blue-200 bg-blue-50">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-full bg-blue-100">
+                      <CheckCircle className="h-4 w-4 text-blue-600" />
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium text-blue-800">Currently Assigned Service Person</div>
+                      <div className="text-xs text-blue-600">{currentAssignedServicePerson.name}{currentAssignedServicePerson.phone ? ` - ${currentAssignedServicePerson.phone}` : ''}</div>
+                    </div>
+                  </div>
+                  <Badge variant="secondary" className="bg-blue-100 text-blue-700">
+                    Current
+                  </Badge>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* User Selection */}
           <Card className="border-2 border-muted">
             <CardContent className="p-6">
@@ -341,8 +415,21 @@ export function AssignTicketDialog({ open, onOpenChange, ticketId, onSuccess, zo
                         : 'Choose a field technician...'
                     } />
                   </SelectTrigger>
-                  <SelectContent className="max-h-80">
-                    <SelectGroup>
+                  <SelectContent className="max-h-[400px] overflow-hidden">
+                    {/* Search Input inside dropdown */}
+                    <div className="sticky top-0 z-10 bg-background border-b p-3">
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          placeholder={`Search ${currentStep === 'ZONE_USER' ? 'zone users' : 'service persons'}...`}
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                          className="pl-10 h-9"
+                        />
+                      </div>
+                    </div>
+                    <div className="max-h-[320px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 pr-2">
+                      <SelectGroup>
                       {currentStep === 'ZONE_USER' ? (
                         zoneUsers.length > 0 ? (
                           zoneUsers
@@ -353,22 +440,36 @@ export function AssignTicketDialog({ open, onOpenChange, ticketId, onSuccess, zo
                                   zone?.serviceZone?.id === zoneId
                               );
                             })
+                            .filter(user => {
+                              if (!searchTerm) return true;
+                              const searchLower = searchTerm.toLowerCase();
+                              return (
+                                user.name.toLowerCase().includes(searchLower) ||
+                                user.email.toLowerCase().includes(searchLower) ||
+                                user.serviceZones?.some(zone => 
+                                  zone?.serviceZone?.name?.toLowerCase().includes(searchLower)
+                                )
+                              );
+                            })
                             .map((user) => (
-                              <SelectItem key={user.id} value={user.id} className="py-4">
+                              <SelectItem key={user.id} value={user.id} className="py-3">
                                 <div className="flex items-center space-x-3 w-full">
-                                  <Avatar className="h-10 w-10">
+                                  <Avatar className="h-8 w-8">
                                     <AvatarFallback className="bg-emerald-100 text-emerald-700">
                                       {user.name.charAt(0).toUpperCase()}
                                     </AvatarFallback>
                                   </Avatar>
                                   <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2">
-                                      <span className="font-medium">{user.name}</span>
-                                      <Badge variant="secondary" className="text-xs">Zone User</Badge>
-                                    </div>
-                                    <div className="flex items-center gap-1 mt-1">
-                                      <Mail className="h-3 w-3 text-muted-foreground" />
-                                      <span className="text-sm text-muted-foreground">{user.email}</span>
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex items-center gap-2">
+                                        <span className="font-medium text-xs">{user.name}</span>
+                                        <Badge variant="secondary" className="text-xs">Zone User</Badge>
+                                      </div>
+                                      {user.phone && (
+                                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                          <span className="truncate max-w-[120px]">{user.phone}</span>
+                                        </div>
+                                      )}
                                     </div>
                                     {user.serviceZones && user.serviceZones.length > 0 && (
                                       <div className="flex items-center gap-1 mt-1">
@@ -392,51 +493,98 @@ export function AssignTicketDialog({ open, onOpenChange, ticketId, onSuccess, zo
                             ))
                         ) : (
                           <div className="p-4 text-center text-muted-foreground">
-                            {loading ? (
-                              <div className="flex items-center justify-center gap-2">
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                                Loading zone users...
+                            {searchTerm ? (
+                              <div className="flex flex-col items-center gap-2">
+                                <Search className="h-8 w-8 text-muted-foreground" />
+                                <p>No zone users found matching "{searchTerm}"</p>
+                                <p className="text-sm">Try searching with different keywords</p>
                               </div>
                             ) : (
-                              'No zone users available'
+                              <div className="flex flex-col items-center gap-2">
+                                <Users className="h-8 w-8 text-muted-foreground" />
+                                <p>No zone users available</p>
+                              </div>
                             )}
                           </div>
                         )
                       ) : servicePersons.length > 0 ? (
-                        servicePersons.map((user) => (
-                          <SelectItem key={user.id} value={user.id} className="py-4">
+                        servicePersons
+                          .filter(user => {
+                            if (!zoneId) return true;
+                            return user.serviceZones?.some(
+                              (zone: { serviceZone: { id: number } }) => 
+                                zone?.serviceZone?.id === zoneId
+                            );
+                          })
+                          .filter(user => {
+                            if (!searchTerm) return true;
+                            const searchLower = searchTerm.toLowerCase();
+                            return (
+                              user.name.toLowerCase().includes(searchLower) ||
+                              user.email.toLowerCase().includes(searchLower) ||
+                              user.serviceZones?.some(zone => 
+                                zone?.serviceZone?.name?.toLowerCase().includes(searchLower)
+                              )
+                            );
+                          })
+                          .map((user) => (
+                          <SelectItem key={user.id} value={user.id} className="py-3">
                             <div className="flex items-center space-x-3 w-full">
-                              <Avatar className="h-10 w-10">
+                              <Avatar className="h-8 w-8">
                                 <AvatarFallback className="bg-blue-100 text-blue-700">
                                   {user.name.charAt(0).toUpperCase()}
                                 </AvatarFallback>
                               </Avatar>
                               <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <span className="font-medium">{user.name}</span>
-                                  <Badge variant="secondary" className="text-xs">Service Person</Badge>
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-medium text-xs">{user.name}</span>
+                                    <Badge variant="secondary" className="text-xs">Service Person</Badge>
+                                  </div>
+                                  {user.phone && (
+                                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                      <span className="truncate max-w-[120px]">{user.phone}</span>
+                                    </div>
+                                  )}
                                 </div>
-                                <div className="flex items-center gap-1 mt-1">
-                                  <Mail className="h-3 w-3 text-muted-foreground" />
-                                  <span className="text-sm text-muted-foreground">{user.email}</span>
-                                </div>
+                                {user.serviceZones && user.serviceZones.length > 0 && (
+                                  <div className="flex items-center gap-1 mt-1">
+                                    <MapPin className="h-3 w-3 text-muted-foreground" />
+                                    <div className="flex flex-wrap gap-1">
+                                      {user.serviceZones.map((zone, index) => (
+                                        <Badge 
+                                          key={zone?.serviceZone?.id || index}
+                                          variant="outline"
+                                          className="text-xs"
+                                        >
+                                          {zone?.serviceZone?.name || 'Unknown Zone'}
+                                        </Badge>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </SelectItem>
                         ))
                       ) : (
                         <div className="p-4 text-center text-muted-foreground">
-                          {loading ? (
-                            <div className="flex items-center justify-center gap-2">
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                              Loading service persons...
+                          {searchTerm ? (
+                            <div className="flex flex-col items-center gap-2">
+                              <Search className="h-8 w-8 text-muted-foreground" />
+                              <p>No service persons found matching "{searchTerm}"</p>
+                              <p className="text-sm">Try searching with different keywords</p>
                             </div>
                           ) : (
-                            'No service persons available'
+                            <div className="flex flex-col items-center gap-2">
+                              <User className="h-8 w-8 text-muted-foreground" />
+                              <p>No service persons available</p>
+                            </div>
                           )}
                         </div>
                       )}
-                    </SelectGroup>
+                      </SelectGroup>
+                    </div>
                   </SelectContent>
                 </Select>
               </div>
@@ -490,7 +638,9 @@ export function AssignTicketDialog({ open, onOpenChange, ticketId, onSuccess, zo
             ) : (
               <>
                 <Zap className="mr-2 h-4 w-4" />
-                {currentStep === 'ZONE_USER' ? 'Assign to Zone User' : 'Assign to Service Person'}
+                {currentStep === 'ZONE_USER' 
+                  ? (currentAssignedZoneUser ? 'Reassign Zone User' : 'Assign to Zone User') 
+                  : (currentAssignedServicePerson ? 'Reassign Service Person' : 'Assign to Service Person')}
               </>
             )}
           </Button>

@@ -20,6 +20,7 @@ import {
   Play,
   FileText
 } from 'lucide-react';
+import { UserRole } from '@/types/user.types';
 
 type StatusOption = {
   value: string;
@@ -52,133 +53,43 @@ export const TicketStatus = {
   PENDING: 'PENDING'
 } as const;
 
-type TicketStatusType = typeof TicketStatus[keyof typeof TicketStatus];
+export type TicketStatusType = typeof TicketStatus[keyof typeof TicketStatus];
 
-// Define valid status transitions based on backend logic
-const validTransitions: Record<TicketStatusType, TicketStatusType[]> = {
-  // Initial state - can be assigned or moved to pending
-  [TicketStatus.OPEN]: [TicketStatus.ASSIGNED, TicketStatus.CANCELLED, TicketStatus.PENDING],
-  
-  // Assigned state - can start working on it or schedule onsite visit
-  [TicketStatus.ASSIGNED]: [
-    TicketStatus.IN_PROCESS, 
-    TicketStatus.ONSITE_VISIT, 
-    TicketStatus.CANCELLED, 
-    TicketStatus.PENDING
-  ],
-  
-  // Main working state - multiple possible next steps
-  [TicketStatus.IN_PROCESS]: [
-    TicketStatus.WAITING_CUSTOMER, 
-    TicketStatus.ONSITE_VISIT,
-    TicketStatus.PO_NEEDED,
-    TicketStatus.SPARE_PARTS_NEEDED,
-    TicketStatus.CLOSED_PENDING,
-    TicketStatus.CANCELLED,
-    TicketStatus.RESOLVED,
+// Simple status options based on user role
+const getAvailableStatuses = (userRole?: UserRole): TicketStatusType[] => {
+  const baseStatuses = [
+    TicketStatus.OPEN,
+    TicketStatus.ASSIGNED,
+    TicketStatus.IN_PROCESS,
     TicketStatus.IN_PROGRESS,
+    TicketStatus.WAITING_CUSTOMER,
+    TicketStatus.ONSITE_VISIT,
+    TicketStatus.ONSITE_VISIT_PLANNED,
+    TicketStatus.PO_NEEDED,
+    TicketStatus.PO_RECEIVED,
+    TicketStatus.SPARE_PARTS_NEEDED,
+    TicketStatus.SPARE_PARTS_BOOKED,
+    TicketStatus.SPARE_PARTS_DELIVERED,
+    TicketStatus.RESOLVED,
     TicketStatus.ON_HOLD,
     TicketStatus.ESCALATED,
-    TicketStatus.PENDING
-  ],
-  
-  // Waiting for customer response
-  [TicketStatus.WAITING_CUSTOMER]: [
-    TicketStatus.IN_PROCESS, 
-    TicketStatus.CLOSED_PENDING, 
-    TicketStatus.CANCELLED, 
-    TicketStatus.PENDING
-  ],
-  
-  // Onsite visit flow
-  [TicketStatus.ONSITE_VISIT]: [
-    TicketStatus.ONSITE_VISIT_PLANNED, 
-    TicketStatus.IN_PROCESS, 
-    TicketStatus.CANCELLED, 
-    TicketStatus.PENDING
-  ],
-  
-  [TicketStatus.ONSITE_VISIT_PLANNED]: [
-    TicketStatus.IN_PROCESS,
-    TicketStatus.PO_NEEDED,
-    TicketStatus.SPARE_PARTS_NEEDED,
-    TicketStatus.CLOSED_PENDING,
+    TicketStatus.PENDING,
     TicketStatus.CANCELLED,
-    TicketStatus.PENDING
-  ],
-  
-  // Purchase order flow
-  [TicketStatus.PO_NEEDED]: [
-    TicketStatus.PO_RECEIVED, 
-    TicketStatus.CANCELLED, 
-    TicketStatus.PENDING
-  ],
-  
-  [TicketStatus.PO_RECEIVED]: [
-    TicketStatus.IN_PROCESS, 
-    TicketStatus.CANCELLED, 
-    TicketStatus.PENDING
-  ],
-  
-  // Spare parts flow
-  [TicketStatus.SPARE_PARTS_NEEDED]: [
-    TicketStatus.SPARE_PARTS_BOOKED, 
-    TicketStatus.CANCELLED, 
-    TicketStatus.PENDING
-  ],
-  
-  [TicketStatus.SPARE_PARTS_BOOKED]: [
-    TicketStatus.SPARE_PARTS_DELIVERED, 
-    TicketStatus.CANCELLED, 
-    TicketStatus.PENDING
-  ],
-  
-  [TicketStatus.SPARE_PARTS_DELIVERED]: [
-    TicketStatus.IN_PROCESS, 
-    TicketStatus.CANCELLED, 
-    TicketStatus.PENDING
-  ],
-  
-  // Closed pending and final states
-  [TicketStatus.CLOSED_PENDING]: [TicketStatus.CLOSED],
-  [TicketStatus.CLOSED]: [], // Final state - no transitions out
-  [TicketStatus.CANCELLED]: [], // Final state - no transitions out
-  
-  // Additional states
-  [TicketStatus.REOPENED]: [TicketStatus.ASSIGNED, TicketStatus.IN_PROCESS, TicketStatus.PENDING],
-  [TicketStatus.IN_PROGRESS]: [TicketStatus.IN_PROCESS, TicketStatus.ON_HOLD, TicketStatus.ESCALATED, TicketStatus.PENDING],
-  [TicketStatus.ON_HOLD]: [TicketStatus.IN_PROCESS, TicketStatus.IN_PROGRESS, TicketStatus.PENDING],
-  [TicketStatus.ESCALATED]: [TicketStatus.IN_PROCESS, TicketStatus.IN_PROGRESS, TicketStatus.PENDING],
-  [TicketStatus.RESOLVED]: [TicketStatus.CLOSED, TicketStatus.PENDING],
-  [TicketStatus.PENDING]: [TicketStatus.OPEN, TicketStatus.ASSIGNED, TicketStatus.IN_PROCESS]
-};
+    TicketStatus.CLOSED_PENDING
+  ];
 
-const statusLabels: Record<TicketStatusType, string> = {
-  [TicketStatus.OPEN]: 'Open',
-  [TicketStatus.ASSIGNED]: 'Assigned',
-  [TicketStatus.IN_PROCESS]: 'In Process',
-  [TicketStatus.WAITING_CUSTOMER]: 'Waiting for Customer',
-  [TicketStatus.ONSITE_VISIT]: 'Onsite Visit',
-  [TicketStatus.ONSITE_VISIT_PLANNED]: 'Onsite Visit Planned',
-  [TicketStatus.PO_NEEDED]: 'PO Needed',
-  [TicketStatus.PO_RECEIVED]: 'PO Received',
-  [TicketStatus.SPARE_PARTS_NEEDED]: 'Spare Parts Needed',
-  [TicketStatus.SPARE_PARTS_BOOKED]: 'Spare Parts Booked',
-  [TicketStatus.SPARE_PARTS_DELIVERED]: 'Spare Parts Delivered',
-  [TicketStatus.CLOSED_PENDING]: 'Pending Closure',
-  [TicketStatus.CLOSED]: 'Closed',
-  [TicketStatus.CANCELLED]: 'Cancelled',
-  [TicketStatus.REOPENED]: 'Reopened',
-  [TicketStatus.IN_PROGRESS]: 'In Progress',
-  [TicketStatus.ON_HOLD]: 'On Hold',
-  [TicketStatus.ESCALATED]: 'Escalated',
-  [TicketStatus.RESOLVED]: 'Resolved',
-  [TicketStatus.PENDING]: 'Pending'
+  // Only admin can set to CLOSED
+  if (userRole === UserRole.ADMIN) {
+    return [...baseStatuses, TicketStatus.CLOSED];
+  }
+
+  return baseStatuses;
 };
 
 type StatusChangeDialogProps = {
   isOpen: boolean;
   currentStatus: TicketStatusType;
+  userRole?: UserRole;
   onClose: () => void;
   onStatusChange: (status: TicketStatusType, comments?: string) => Promise<void>;
 };
@@ -186,6 +97,7 @@ type StatusChangeDialogProps = {
 export function StatusChangeDialog({ 
   isOpen, 
   currentStatus, 
+  userRole,
   onClose, 
   onStatusChange 
 }: StatusChangeDialogProps) {
@@ -193,16 +105,20 @@ export function StatusChangeDialog({
   const [comments, setComments] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Get valid status options based on current status
+  // Get available status options based on user role
   const statusOptions = useMemo(() => {
-    const validStatuses = validTransitions[currentStatus] || [];
-    return validStatuses.map(status => ({
+    const availableStatuses = getAvailableStatuses(userRole);
+    
+    // Filter out current status from options
+    const filteredStatuses = availableStatuses.filter(status => status !== currentStatus);
+    
+    return filteredStatuses.map(status => ({
       value: status,
-      label: statusLabels[status] || status.replace(/_/g, ' '),
+      label: status.replace(/_/g, ' '),
       isDestructive: ['CANCELLED', 'CLOSED', 'ESCALATED'].includes(status),
       requiresComment: ['CANCELLED', 'CLOSED', 'RESOLVED', 'ESCALATED', 'ON_HOLD'].includes(status)
     }));
-  }, [currentStatus]);
+  }, [currentStatus, userRole]);
 
   const selectedOption = selectedStatus ? statusOptions.find(opt => opt.value === selectedStatus) : null;
   const showComments = selectedOption?.requiresComment;
@@ -229,40 +145,40 @@ export function StatusChangeDialog({
     onClose();
   };
 
-  const getStatusIcon = (status: string) => {
+  const getStatusIcon = (status: TicketStatusType) => {
     switch (status) {
-      case 'RESOLVED':
-      case 'CLOSED':
+      case TicketStatus.RESOLVED:
+      case TicketStatus.CLOSED:
         return <CheckCircle className="h-4 w-4" />;
-      case 'CANCELLED':
+      case TicketStatus.CANCELLED:
         return <XCircle className="h-4 w-4" />;
-      case 'ESCALATED':
+      case TicketStatus.ESCALATED:
         return <AlertTriangle className="h-4 w-4" />;
-      case 'ON_HOLD':
+      case TicketStatus.ON_HOLD:
         return <Pause className="h-4 w-4" />;
-      case 'IN_PROGRESS':
-      case 'IN_PROCESS':
+      case TicketStatus.IN_PROGRESS:
+      case TicketStatus.IN_PROCESS:
         return <Play className="h-4 w-4" />;
-      case 'PENDING':
+      case TicketStatus.PENDING:
         return <Clock className="h-4 w-4" />;
       default:
         return <Zap className="h-4 w-4" />;
     }
   };
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status: TicketStatusType) => {
     switch (status) {
-      case 'RESOLVED':
-      case 'CLOSED':
+      case TicketStatus.RESOLVED:
+      case TicketStatus.CLOSED:
         return 'text-green-600';
-      case 'CANCELLED':
+      case TicketStatus.CANCELLED:
         return 'text-red-600';
-      case 'ESCALATED':
+      case TicketStatus.ESCALATED:
         return 'text-orange-600';
-      case 'ON_HOLD':
+      case TicketStatus.ON_HOLD:
         return 'text-yellow-600';
-      case 'IN_PROGRESS':
-      case 'IN_PROCESS':
+      case TicketStatus.IN_PROGRESS:
+      case TicketStatus.IN_PROCESS:
         return 'text-blue-600';
       default:
         return 'text-gray-600';
@@ -271,7 +187,7 @@ export function StatusChangeDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={open => !open && handleClose()}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[650px] max-h-[90vh] overflow-y-auto">
         <DialogHeader className="space-y-3">
           <DialogTitle className="text-xl font-semibold flex items-center gap-2">
             <Zap className="h-5 w-5 text-primary" />
@@ -315,25 +231,25 @@ export function StatusChangeDialog({
               <SelectTrigger className="w-full h-12 text-left">
                 <SelectValue placeholder="Choose a new status..." />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="max-h-[500px] overflow-y-auto">
                 {statusOptions.map((option) => (
                   <SelectItem 
                     key={option.value} 
                     value={option.value}
-                    className={`py-3 ${option.isDestructive ? 'text-destructive' : ''}`}
+                    className={`py-2.5 px-3 ${option.isDestructive ? 'text-destructive' : ''}`}
                   >
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2">
                       <div className={getStatusColor(option.value)}>
                         {getStatusIcon(option.value)}
                       </div>
-                      <div className="flex flex-col">
-                        <span className="font-medium">{option.label}</span>
+                      <div className="flex-1 min-w-0">
+                        <span className="font-medium text-sm truncate">{option.label}</span>
                         {option.requiresComment && (
-                          <span className="text-xs text-muted-foreground">Requires comment</span>
+                          <span className="text-xs text-muted-foreground block">Requires comment</span>
                         )}
                       </div>
                       {option.isDestructive && (
-                        <Badge variant="destructive" className="ml-auto text-xs">Critical</Badge>
+                        <Badge variant="destructive" className="ml-2 text-xs px-2 py-0">Critical</Badge>
                       )}
                     </div>
                   </SelectItem>
@@ -351,7 +267,7 @@ export function StatusChangeDialog({
                     {getStatusIcon(selectedStatus)}
                   </div>
                   <div>
-                    <p className="font-medium">New Status: {statusLabels[selectedStatus]}</p>
+                    <p className="font-medium">New Status: {selectedStatus.replace(/_/g, ' ')}</p>
                     <p className="text-sm text-muted-foreground">
                       {selectedOption?.isDestructive ? 'This action cannot be undone' : 'Status will be updated immediately'}
                     </p>
@@ -366,24 +282,24 @@ export function StatusChangeDialog({
             <div className="space-y-3">
               <Label htmlFor="comments" className="text-sm font-medium flex items-center gap-2">
                 <FileText className="h-4 w-4" />
-                {selectedStatus === 'CLOSED' ? 'Resolution Details' : 
-                 selectedStatus === 'CANCELLED' ? 'Cancellation Reason' :
-                 selectedStatus === 'ESCALATED' ? 'Escalation Details' :
-                 selectedStatus === 'ON_HOLD' ? 'Hold Reason' : 'Additional Notes'}
-                {selectedStatus === 'CLOSED' && (
+                {selectedStatus === TicketStatus.CLOSED ? 'Resolution Details' : 
+                 selectedStatus === TicketStatus.CANCELLED ? 'Cancellation Reason' :
+                 selectedStatus === TicketStatus.ESCALATED ? 'Escalation Details' :
+                 selectedStatus === TicketStatus.ON_HOLD ? 'Hold Reason' : 'Additional Notes'}
+                {selectedStatus === TicketStatus.CLOSED && (
                   <Badge variant="destructive" className="text-xs">Required</Badge>
                 )}
               </Label>
               <Textarea
                 id="comments"
                 placeholder={
-                  selectedStatus === 'CLOSED' 
+                  selectedStatus === TicketStatus.CLOSED 
                     ? 'Describe how the issue was resolved...' 
-                    : selectedStatus === 'CANCELLED'
+                    : selectedStatus === TicketStatus.CANCELLED
                     ? 'Explain why this ticket is being cancelled...'
-                    : selectedStatus === 'ESCALATED'
+                    : selectedStatus === TicketStatus.ESCALATED
                     ? 'Provide escalation details and next steps...'
-                    : selectedStatus === 'ON_HOLD'
+                    : selectedStatus === TicketStatus.ON_HOLD
                     ? 'Explain why this ticket is being put on hold...'
                     : 'Add any relevant notes or comments...'
                 }
@@ -391,7 +307,7 @@ export function StatusChangeDialog({
                 onChange={(e) => setComments(e.target.value)}
                 rows={4}
                 className="w-full resize-none"
-                required={selectedStatus === 'CLOSED'}
+                required={selectedStatus === TicketStatus.CLOSED}
               />
               <p className="text-xs text-muted-foreground">
                 {comments.length}/500 characters

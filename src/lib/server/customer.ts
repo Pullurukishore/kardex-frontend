@@ -1,0 +1,87 @@
+import { cookies } from 'next/headers';
+import { Customer } from '@/types/customer';
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5003/api';
+
+interface CustomerFilters {
+  search?: string;
+  status?: string;
+  industry?: string;
+  page?: number;
+  limit?: number;
+}
+
+async function makeServerRequest(endpoint: string) {
+  const cookieStore = cookies();
+  const accessToken = cookieStore.get('accessToken')?.value;
+  
+  if (!accessToken) {
+    throw new Error('No access token found');
+  }
+
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      'Cookie': cookieStore.toString(),
+    },
+    cache: 'no-store', // Ensure fresh data
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch ${endpoint}: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+export async function getCustomers(filters: CustomerFilters = {}): Promise<Customer[]> {
+  const { search = '', status = 'all', industry = 'all', page = 1, limit = 10 } = filters;
+  
+  const params = new URLSearchParams({
+    page: page.toString(),
+    limit: limit.toString(),
+    ...(search && { search }),
+  });
+
+  try {
+    const customers: Customer[] = await makeServerRequest(`/customers?${params}`);
+    
+    // Apply client-side filtering for status and industry since API might not support these
+    return customers.filter(customer => {
+      const matchesStatus = status === 'all' || 
+        (status === 'active' && customer.isActive) ||
+        (status === 'inactive' && !customer.isActive);
+      
+      const matchesIndustry = industry === 'all' || customer.industry === industry;
+      
+      return matchesStatus && matchesIndustry;
+    });
+  } catch (error) {
+    console.error('Error fetching customers:', error);
+    return [];
+  }
+}
+
+export async function getCustomerStats(customers: Customer[]) {
+  return {
+    total: customers.length,
+    active: customers.filter(c => c.isActive).length,
+    inactive: customers.filter(c => !c.isActive).length,
+    totalAssets: customers.reduce((sum, c) => sum + (c._count?.assets || 0), 0),
+    totalTickets: customers.reduce((sum, c) => sum + (c._count?.tickets || 0), 0)
+  };
+}
+
+export async function getUniqueIndustries(customers: Customer[]): Promise<string[]> {
+  return Array.from(new Set(customers.map(c => c.industry).filter(Boolean)));
+}
+
+export async function deleteCustomerById(id: number): Promise<void> {
+  try {
+    await makeServerRequest(`/customers/${id}`);
+  } catch (error) {
+    console.error('Error deleting customer:', error);
+    throw error;
+  }
+}

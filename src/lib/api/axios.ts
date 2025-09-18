@@ -21,6 +21,7 @@ const api: AxiosInstance = axios.create({
     'Content-Type': 'application/json',
   },
   withCredentials: true,
+  timeout: 15000, // 15 second timeout to prevent hanging requests
 });
 
 // Request interceptor to add auth token and handle token refresh
@@ -32,8 +33,8 @@ api.interceptors.request.use(
       // Check if token is expired or about to expire
       if (isTokenExpired(token)) {
         try {
-          // Skip if already refreshing to prevent multiple refresh attempts
-          if (!window.__isRefreshing) {
+          // Skip if already refreshing to prevent multiple refresh attempts (client-side only)
+          if (typeof window !== 'undefined' && !window.__isRefreshing) {
             window.__isRefreshing = true;
             const response = await axios.post(
               `${API_BASE_URL}/auth/refresh-token`,
@@ -44,17 +45,24 @@ api.interceptors.request.use(
             if (response.data.accessToken) {
               setCookie('accessToken', response.data.accessToken);
               config.headers.Authorization = `Bearer ${response.data.accessToken}`;
+              
+              // Set userRole cookie if provided in response
+              if (response.data.user?.role) {
+                setCookie('userRole', response.data.user.role);
+              }
             }
           }
         } catch (error) {
-          // If refresh fails, clear tokens and redirect to login
+          // If refresh fails, clear tokens and redirect to login (client-side only)
           deleteCookie('accessToken');
-          if (window.location.pathname !== '/login') {
-            window.location.href = '/login';
+          if (typeof window !== 'undefined' && window.location.pathname !== '/auth/login') {
+            window.location.href = '/auth/login';
           }
           return Promise.reject(error);
         } finally {
-          window.__isRefreshing = false;
+          if (typeof window !== 'undefined') {
+            window.__isRefreshing = false;
+          }
         }
       } else {
         config.headers.Authorization = `Bearer ${token}`;
@@ -94,8 +102,8 @@ api.interceptors.response.use(
 
     // If error is 401 and we haven't already tried to refresh
     if (error.response?.status === 401 && !originalRequest._retry) {
-      // If we're already on the login page, don't try to refresh
-      if (window.location.pathname === '/login') {
+      // If we're already on the login page, don't try to refresh (client-side only)
+      if (typeof window !== 'undefined' && window.location.pathname === '/auth/login') {
         return Promise.reject(error);
       }
       
@@ -123,14 +131,14 @@ api.interceptors.response.use(
         }
         throw new Error('No access token in response');
       } catch (error) {
-        // Clear any existing tokens
+        // Clear any existing tokens (client-side only)
         if (typeof window !== 'undefined') {
           deleteCookie('accessToken');
           // Don't delete refreshToken cookie as it's httpOnly
           
           // Only redirect to login if not already there
-          if (window.location.pathname !== '/login') {
-            window.location.href = '/login';
+          if (window.location.pathname !== '/auth/login') {
+            window.location.href = '/auth/login';
           }
         }
         return Promise.reject(error);

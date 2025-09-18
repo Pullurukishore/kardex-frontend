@@ -74,7 +74,7 @@ export default function ServicePersonDetailPage() {
 
   if (loading) {
     return (
-      <div className="container mx-auto py-6">
+      <div>
         <div className="flex items-center justify-center h-64">
           <div className="text-lg">Loading service person details...</div>
         </div>
@@ -84,7 +84,7 @@ export default function ServicePersonDetailPage() {
 
   if (!servicePerson) {
     return (
-      <div className="container mx-auto py-6">
+      <div>
         <div className="text-center">
           <h1 className="text-2xl font-bold text-muted-foreground">Service Person Not Found</h1>
           <p className="text-muted-foreground mt-2">The requested service person could not be found.</p>
@@ -97,7 +97,7 @@ export default function ServicePersonDetailPage() {
   }
 
   return (
-    <div className="container mx-auto py-6 space-y-6">
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">

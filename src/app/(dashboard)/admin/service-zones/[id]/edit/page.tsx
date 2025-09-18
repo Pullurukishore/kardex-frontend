@@ -9,20 +9,16 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
-import { MultiSelect } from '@/components/ui/multi-select';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useToast } from '@/components/ui/use-toast';
 import { ArrowLeft } from 'lucide-react';
 import { getServiceZone, updateServiceZone } from '@/services/zone.service';
-import { getServicePersons } from '@/services/user.service';
-import type { ServiceZone, ServicePerson } from '@/types/zone';
-import type { User } from '@/services/user.service';
+import type { ServiceZone } from '@/types/zone';
 
 const serviceZoneFormSchema = z.object({
   name: z.string().min(2, 'Name is required'),
   description: z.string().optional(),
   isActive: z.boolean().default(true),
-  servicePersonIds: z.array(z.string()).default([]),
 });
 
 type ServiceZoneFormValues = z.infer<typeof serviceZoneFormSchema>;
@@ -32,17 +28,10 @@ export default function EditServiceZonePage() {
   const params = useParams();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
-  const [servicePersons, setServicePersons] = useState<User[]>([]);
   const [zone, setZone] = useState<ServiceZone | null>(null);
 
   const zoneId = params?.id ? parseInt(params.id as string) : null;
 
-  const servicePersonOptions = useMemo(() => {
-    return servicePersons.map((person: any) => ({
-      value: person.id.toString(),
-      label: person.name || person.email || `User ${person.id}`
-    }));
-  }, [servicePersons]);
 
   const form = useForm<ServiceZoneFormValues>({
     resolver: zodResolver(serviceZoneFormSchema),
@@ -50,7 +39,6 @@ export default function EditServiceZonePage() {
       name: '',
       description: '',
       isActive: true,
-      servicePersonIds: [],
     },
   });
 
@@ -60,20 +48,15 @@ export default function EditServiceZonePage() {
       
       setIsLoading(true);
       try {
-        const [zoneData, servicePersonsData] = await Promise.all([
-          getServiceZone(zoneId),
-          getServicePersons()
-        ]);
+        const zoneData = await getServiceZone(zoneId);
         
         setZone(zoneData);
-        setServicePersons(servicePersonsData.data || []);
         
         // Populate form with existing data
         form.reset({
           name: zoneData.name,
           description: zoneData.description || '',
           isActive: zoneData.isActive,
-          servicePersonIds: zoneData.servicePersons?.map(sp => sp.user.id.toString()) || [],
         });
       } catch (error) {
         console.error('Failed to load data:', error);
@@ -96,10 +79,7 @@ export default function EditServiceZonePage() {
     if (!zoneId) return;
     
     try {
-      const payload = {
-        ...values,
-        servicePersonIds: values.servicePersonIds.map(id => parseInt(id)),
-      };
+      const payload = values;
       
       await updateServiceZone(zoneId, payload);
       
@@ -205,27 +185,6 @@ export default function EditServiceZonePage() {
                   )}
                 />
 
-                <FormField
-                  control={form.control}
-                  name="servicePersonIds"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Assign Service Persons</FormLabel>
-                      <FormControl>
-                        <MultiSelect
-                          selected={field.value}
-                          options={servicePersonOptions}
-                          onChange={field.onChange}
-                          placeholder="Select service persons..."
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        Select service persons who will be responsible for this zone
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
                 
                 <FormField
                   control={form.control}

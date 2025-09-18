@@ -19,9 +19,6 @@ const assetFormSchema = z.object({
   machineId: z.string().min(1, 'Machine ID is required'),
   model: z.string().min(1, 'Model is required'),
   serialNo: z.string().min(1, 'Serial number is required'),
-  purchaseDate: z.string().optional(),
-  warrantyStart: z.string().optional(),
-  warrantyEnd: z.string().optional(),
   location: z.string().optional(),
   status: z.enum(['ACTIVE', 'INACTIVE', 'MAINTENANCE', 'DECOMMISSIONED']).default('ACTIVE'),
   notes: z.string().optional(),
@@ -96,7 +93,7 @@ export default function AddAssetPage() {
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <FormField
                   control={form.control}
                   name="machineId"
@@ -159,47 +156,6 @@ export default function AddAssetPage() {
                   )}
                 />
 
-                <FormField
-                  control={form.control}
-                  name="purchaseDate"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Purchase Date</FormLabel>
-                      <FormControl>
-                        <Input type="date" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="warrantyStart"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Warranty Start</FormLabel>
-                      <FormControl>
-                        <Input type="date" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="warrantyEnd"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Warranty End</FormLabel>
-                      <FormControl>
-                        <Input type="date" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
 
                 <FormField
                   control={form.control}
