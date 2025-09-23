@@ -14,10 +14,10 @@ import { format } from 'date-fns';
 import { useToast } from '@/components/ui/use-toast';
 import { motion } from 'framer-motion';
 
-type TicketStatus = 'OPEN' | 'ASSIGNED' | 'IN_PROCESS' | 'WAITING_CUSTOMER' | 'ONSITE_VISIT' | 
+type TicketStatus = 'OPEN' | 'ASSIGNED' | 'IN_PROGRESS' | 'WAITING_CUSTOMER' | 'ONSITE_VISIT' | 
   'ONSITE_VISIT_PLANNED' | 'PO_NEEDED' | 'PO_RECEIVED' | 'SPARE_PARTS_NEEDED' | 
   'SPARE_PARTS_BOOKED' | 'SPARE_PARTS_DELIVERED' | 'CLOSED_PENDING' | 'CLOSED' | 
-  'CANCELLED' | 'REOPENED' | 'IN_PROGRESS' | 'ON_HOLD' | 'ESCALATED' | 'RESOLVED' | 'PENDING';
+  'CANCELLED' | 'REOPENED' | 'ON_HOLD' | 'ESCALATED' | 'RESOLVED' | 'PENDING';
 
 type Priority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 
@@ -119,7 +119,7 @@ export default function ZoneTicketsPage() {
         return 'default';
       case 'ASSIGNED':
         return 'secondary';
-      case 'IN_PROCESS':
+      case 'IN_PROGRESS':
         return 'default';
       case 'ONSITE_VISIT_PLANNED':
         return 'outline';
@@ -162,7 +162,7 @@ export default function ZoneTicketsPage() {
   // Calculate stats
   const totalTickets = tickets.length;
   const openTickets = tickets.filter(t => t.status === 'OPEN').length;
-  const assignedTickets = tickets.filter(t => t.status === 'ASSIGNED' || t.status === 'IN_PROCESS').length;
+  const assignedTickets = tickets.filter(t => t.status === 'ASSIGNED' || t.status === 'IN_PROGRESS').length;
   const closedTickets = tickets.filter(t => t.status === 'CLOSED').length;
   const criticalTickets = tickets.filter(t => t.priority === 'CRITICAL').length;
 
@@ -346,7 +346,7 @@ export default function ZoneTicketsPage() {
                     <SelectItem value="">All Statuses</SelectItem>
                     <SelectItem value="OPEN">Open</SelectItem>
                     <SelectItem value="ASSIGNED">Assigned</SelectItem>
-                    <SelectItem value="IN_PROCESS">In Process</SelectItem>
+                    <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
                     <SelectItem value="ONSITE_VISIT_PLANNED">Onsite Visit Planned</SelectItem>
                     <SelectItem value="ONSITE_VISIT">Onsite Visit</SelectItem>
                     <SelectItem value="RESOLVED">Resolved</SelectItem>
@@ -487,7 +487,7 @@ export default function ZoneTicketsPage() {
                                 className={
                                   ticket.status === 'OPEN' ? 'bg-orange-100 text-orange-800 hover:bg-orange-200' :
                                   ticket.status === 'ASSIGNED' ? 'bg-blue-100 text-blue-800 hover:bg-blue-200' :
-                                  ticket.status === 'IN_PROCESS' ? 'bg-purple-100 text-purple-800 hover:bg-purple-200' :
+                                  ticket.status === 'IN_PROGRESS' ? 'bg-purple-100 text-purple-800 hover:bg-purple-200' :
                                   ticket.status === 'CLOSED' ? 'bg-green-100 text-green-800 hover:bg-green-200' :
                                   'bg-gray-100 text-gray-600 hover:bg-gray-200'
                                 }

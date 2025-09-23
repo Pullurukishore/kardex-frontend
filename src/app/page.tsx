@@ -10,28 +10,35 @@ export default function Home() {
   const router = useRouter();
 
   useEffect(() => {
-    if (!isLoading) {
-      if (isAuthenticated && user) {
-        // Redirect authenticated users to their dashboard
-        const getRoleBasedRedirect = (role: string): string => {
-          switch (role) {
-            case 'ADMIN':
-              return '/admin/dashboard';
-            case 'ZONE_USER':
-              return '/zone/dashboard';
-            case 'SERVICE_PERSON':
-              return '/service-person/dashboard';
-            default:
-              return '/auth/login';
-          }
-        };
-        
-        router.replace(getRoleBasedRedirect(user.role));
-      } else {
-        // Redirect unauthenticated users to login
-        router.replace('/auth/login');
+    // Add a small delay to ensure AuthContext has had time to initialize
+    const timer = setTimeout(() => {
+      if (!isLoading) {
+        if (isAuthenticated && user) {
+          // Redirect authenticated users to their dashboard
+          const getRoleBasedRedirect = (role: string): string => {
+            switch (role) {
+              case 'ADMIN':
+                return '/admin/dashboard';
+              case 'ZONE_USER':
+                return '/zone/dashboard';
+              case 'SERVICE_PERSON':
+                return '/service-person/dashboard';
+              default:
+                return '/auth/login';
+            }
+          };
+          
+          console.log('Root page: Redirecting authenticated user to dashboard');
+          router.replace(getRoleBasedRedirect(user.role));
+        } else {
+          // Redirect unauthenticated users to login
+          console.log('Root page: Redirecting unauthenticated user to login');
+          router.replace('/auth/login');
+        }
       }
-    }
+    }, 100); // Small delay to ensure auth state is properly initialized
+
+    return () => clearTimeout(timer);
   }, [isLoading, isAuthenticated, user, router]);
 
   // Show loading spinner while determining authentication status

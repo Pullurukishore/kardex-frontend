@@ -199,13 +199,13 @@ export function CustomerSelectionForm({
               <FormItem>
                 <FormLabel className="flex items-center space-x-2">
                   <Settings className="h-4 w-4 text-indigo-500" />
-                  <span>Asset (Optional)</span>
+                  <span>Asset</span>
                 </FormLabel>
                 <div className="flex gap-2">
                   <Select 
                     onValueChange={field.onChange} 
                     value={field.value || ''}
-                    disabled={!customerId || isSubmitting || isLoadingCustomers}
+                    disabled={!customerId || assets.length === 0 || isSubmitting || isLoadingCustomers}
                   >
                     <FormControl>
                       <SelectTrigger className="focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
@@ -214,19 +214,13 @@ export function CustomerSelectionForm({
                             !customerId 
                               ? 'Select a customer first' 
                               : assets.length === 0 
-                                ? 'No assets available' 
-                                : 'Select asset (optional)'
+                                ? 'No assets available - Add one below' 
+                                : 'Select asset'
                           } 
                         />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="">
-                        <div className="flex items-center space-x-2">
-                          <div className="h-3 w-3 rounded-full border-2 border-gray-300"></div>
-                          <span>None</span>
-                        </div>
-                      </SelectItem>
                       {assets.map((asset) => (
                         <SelectItem key={asset.id} value={asset.id.toString()}>
                           <div className="flex items-center space-x-2">

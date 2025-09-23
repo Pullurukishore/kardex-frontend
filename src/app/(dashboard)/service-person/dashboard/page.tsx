@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -26,9 +26,16 @@ import {
   Info
 } from 'lucide-react';
 import { AttendanceWidget } from '@/components/attendance/AttendanceWidget';
-import { ActivityLogger } from '@/components/activity/ActivityLogger';
+import ActivityLogger from '@/components/activity/ActivityLogger';
 import { apiClient } from '@/lib/api/api-client';
+import api from '@/lib/api/axios';
 import Link from 'next/link';
+
+interface ActivityStats {
+  totalActivities: number;
+  completedActivities: number;
+  totalHours: number;
+}
 
 interface DashboardStats {
   todayHours: number;
@@ -37,7 +44,7 @@ interface DashboardStats {
   activeTickets: number;
   completedTickets: number;
   pendingActivities: number;
-  efficiency: number;
+  activityStats: ActivityStats;
 }
 
 interface AttendanceStatus {
@@ -54,7 +61,7 @@ interface AttendanceStatus {
 interface RecentTicket {
   id: number;
   title: string;
-  status: 'OPEN' | 'IN_PROGRESS' | 'ASSIGNED' | 'IN_PROCESS' | 'ONSITE_VISIT' | 'RESOLVED' | 'CLOSED' | 'CLOSED_PENDING';
+  status: 'OPEN' | 'IN_PROGRESS' | 'ASSIGNED' | 'ONSITE_VISIT' | 'RESOLVED' | 'CLOSED' | 'CLOSED_PENDING';
   priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
   customer: {
     companyName: string;
@@ -71,15 +78,16 @@ interface Notification {
   read: boolean;
 }
 
-const STATUS_CONFIG = {
+const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   OPEN: { label: 'Open', color: 'bg-blue-100 text-blue-800' },
   IN_PROGRESS: { label: 'In Progress', color: 'bg-yellow-100 text-yellow-800' },
   ASSIGNED: { label: 'Assigned', color: 'bg-purple-100 text-purple-800' },
-  IN_PROCESS: { label: 'In Process', color: 'bg-yellow-100 text-yellow-800' },
   ONSITE_VISIT: { label: 'Onsite Visit', color: 'bg-orange-100 text-orange-800' },
   RESOLVED: { label: 'Resolved', color: 'bg-green-100 text-green-800' },
   CLOSED: { label: 'Closed', color: 'bg-gray-100 text-gray-800' },
   CLOSED_PENDING: { label: 'Closed Pending', color: 'bg-gray-100 text-gray-600' },
+  // Add default fallback for any unexpected status
+  DEFAULT: { label: 'Unknown', color: 'bg-gray-100 text-gray-600' },
 };
 
 const PRIORITY_CONFIG = {
@@ -95,10 +103,72 @@ export default function ServicePersonDashboardPage() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [attendanceStatus, setAttendanceStatus] = useState<AttendanceStatus | null>(null);
   const [loading, setLoading] = useState(true);
+  const [activities, setActivities] = useState<any[]>([]);
   const { toast } = useToast();
 
-  // Fetch dashboard data
-  const fetchDashboardData = async () => {
+  // Refresh activity data
+  const refreshActivityData = useCallback(async () => {
+    try {
+      // Fetch full activities list for ActivityLogger component using raw axios client
+      // This matches the response structure shown in the API response
+      const response = await api.get('/activities');
+      
+      // Process activities data - backend returns { activities: [...], pagination: {...} }
+      const responseData = response.data;
+      const activitiesData = responseData?.activities || [];
+      
+      // Update activities state for ActivityLogger - force re-render with new array
+      setActivities([...activitiesData]);
+      
+      // Calculate stats from today's activities
+      const today = new Date();
+      const todayActivities = activitiesData.filter((activity: any) => {
+        if (!activity.startTime) return false;
+        const activityDate = new Date(activity.startTime);
+        return activityDate.toDateString() === today.toDateString();
+      });
+      
+      // Count completed activities (activities with endTime)
+      const completedCount = todayActivities.filter((a: any) => 
+        a && a.endTime
+      ).length;
+      
+      // Calculate total hours from activities (convert minutes to hours)
+      const totalMinutes = todayActivities.reduce((sum: number, a: any) => {
+        if (a.duration) {
+          return sum + (Number(a.duration) || 0);
+        }
+        return sum;
+      }, 0);
+      
+      const activityDayData: ActivityStats = {
+        totalActivities: todayActivities.length,
+        completedActivities: completedCount,
+        totalHours: totalMinutes / 60 // Convert minutes to hours
+      };
+
+      // Update stats with new activity data
+      setStats(prev => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          activityStats: activityDayData
+        };
+      });
+    } catch (error: any) {
+      // Show user-friendly error message
+      toast({
+        title: "Error Loading Activities",
+        description: `Failed to load activities: ${error.message}`,
+        variant: "destructive",
+      });
+      
+      setActivities([]); // Set empty array on error
+    }
+  }, []);
+
+  // Fetch all dashboard data
+  const fetchDashboardData = useCallback(async () => {
     try {
       setLoading(true);
       
@@ -128,30 +198,32 @@ export default function ServicePersonDashboardPage() {
         apiClient.get('/activities/stats', { params: { period: 'day' } }),
         apiClient.get('/activities/stats', { params: { period: 'month' } })
       ]);
+      
 
       // Process attendance data (day/week/month)
       let attendanceDayData: any = {};
       let attendanceWeekData: any = {};
       let attendanceMonthData: any = {};
+      
       if (attendanceDayResponse.status === 'fulfilled') {
-        attendanceDayData = attendanceDayResponse.value.data || {};
-        console.log('Attendance day data loaded:', attendanceDayData);
+        // For 'day' period, we need to get today's attendance specifically
+        const response = attendanceDayResponse.value;
+        attendanceDayData = response.data || response || {};
       } else {
-        console.error('Error fetching attendance day data:', attendanceDayResponse.reason);
         attendanceDayData = { totalHours: 0 };
       }
+      
       if (attendanceWeekResponse.status === 'fulfilled') {
-        attendanceWeekData = attendanceWeekResponse.value.data || {};
-        console.log('Attendance week data loaded:', attendanceWeekData);
+        const response = attendanceWeekResponse.value;
+        attendanceWeekData = response.data || response || {};
       } else {
-        console.error('Error fetching attendance week data:', attendanceWeekResponse.reason);
         attendanceWeekData = { totalHours: 0 };
       }
+      
       if (attendanceMonthResponse.status === 'fulfilled') {
-        attendanceMonthData = attendanceMonthResponse.value.data || {};
-        console.log('Attendance month data loaded:', attendanceMonthData);
+        const response = attendanceMonthResponse.value;
+        attendanceMonthData = response.data || response || {};
       } else {
-        console.error('Error fetching attendance month data:', attendanceMonthResponse.reason);
         attendanceMonthData = { totalHours: 0, avgHoursPerDay: 0, totalDaysWorked: 0 };
       }
 
@@ -159,12 +231,8 @@ export default function ServicePersonDashboardPage() {
       if (attendanceStatusResponse.status === 'fulfilled') {
         const statusResponse = attendanceStatusResponse.value;
         const statusData = (statusResponse as any)?.data ?? statusResponse;
-        console.log('Raw attendance status response:', statusResponse);
         setAttendanceStatus(statusData as any);
-        console.log('Attendance status set to:', statusData);
       } else {
-        console.error('Error fetching attendance status:', attendanceStatusResponse.reason);
-        console.error('Full error details:', attendanceStatusResponse);
         // Only set default if there was actually an error
         setAttendanceStatus({ isCheckedIn: false });
       }
@@ -181,89 +249,117 @@ export default function ServicePersonDashboardPage() {
           // Handle nested data structure if needed
           ticketsData = responseData.data.data;
         } else {
-          console.warn('Unexpected tickets data format:', responseData);
           ticketsData = [];
         }
-        console.log('Tickets data loaded:', ticketsData);
       } else {
-        console.error('Error fetching tickets:', ticketsResponse.reason);
         ticketsData = [];
       }
 
       // Process notifications data
       if (notificationsResponse.status === 'fulfilled') {
-        console.log('Raw notifications response:', notificationsResponse.value);
         // The notifications are directly in the data array, not in data.data
         const rawNotifications = Array.isArray(notificationsResponse.value.data) 
           ? notificationsResponse.value.data 
           : [];
-        console.log('Raw notifications array:', rawNotifications);
         // Map API response to frontend format
-        notificationsData = rawNotifications.map((notif: any) => {
-          const mapped = {
-            ...notif,
-            read: notif.status !== 'UNREAD' // Convert status to boolean read field
-          };
-          console.log('Mapped notification:', mapped);
-          return mapped;
-        });
-        console.log('Processed notifications data:', notificationsData);
+        notificationsData = rawNotifications.map((notif: any) => ({
+          ...notif,
+          read: notif.status !== 'UNREAD' // Convert status to boolean read field
+        }));
       } else {
-        console.error('Error fetching notifications:', notificationsResponse.reason);
         notificationsData = [];
       }
 
 
       // Process activity data (day and month)
-      let activityDayData: any = {};
+      let activityDayData: ActivityStats = {
+        totalActivities: 0,
+        completedActivities: 0,
+        totalHours: 0
+      };
+      
       if (activityDayResponse.status === 'fulfilled') {
-        activityDayData = activityDayResponse.value.data || {};
-        console.log('Activity day data loaded:', activityDayData);
+        const response = activityDayResponse.value;
+        const responseData = response.data || response || {};
+        
+        // Try to extract activities count from different possible response structures
+        const activities = Array.isArray(responseData) 
+          ? responseData 
+          : responseData.activities || [];
+        
+        // Count completed activities
+        const completedCount = activities.filter((a: any) => 
+          a && (a.status === 'COMPLETED' || a.isCompleted)
+        ).length;
+        
+        // Calculate total hours from activities
+        const hours = activities.reduce((sum: number, a: any) => {
+          if (a.duration) {
+            return sum + (Number(a.duration) || 0);
+          }
+          return sum;
+        }, 0);
+        
+        activityDayData = {
+          totalActivities: activities.length,
+          completedActivities: completedCount,
+          totalHours: hours
+        };
       } else {
-        console.error('Error fetching activity day data:', activityDayResponse.reason);
-        activityDayData = { totalActivities: 0, totalHours: 0 };
+        activityDayData = { 
+          totalActivities: 0, 
+          completedActivities: 0,
+          totalHours: 0 
+        };
       }
+      
       if (activityMonthResponse.status === 'fulfilled') {
-        activityData = activityMonthResponse.value.data || {};
-        console.log('Activity month data loaded:', activityData);
+        const response = activityMonthResponse.value;
+        activityData = response.data || response || {};
       } else {
-        console.error('Error fetching activity month data:', activityMonthResponse.reason);
         activityData = { totalActivities: 0, totalHours: 0 };
       }
 
       // Calculate real stats from backend data
       const activeTickets = Array.isArray(ticketsData) ? ticketsData.filter((t: any) => 
-        t && t.status && ['OPEN', 'IN_PROGRESS', 'ASSIGNED', 'IN_PROCESS', 'ONSITE_VISIT'].includes(t.status)
+        t && t.status && ['OPEN', 'IN_PROGRESS', 'ASSIGNED', 'ONSITE_VISIT'].includes(t.status)
       ).length : 0;
       
       const completedTickets = Array.isArray(ticketsData) ? ticketsData.filter((t: any) => 
         t && t.status && ['RESOLVED', 'CLOSED', 'CLOSED_PENDING'].includes(t.status)
       ).length : 0;
 
-      // Use real attendance data for hours - ensure numbers
-      const todayHours = Number(attendanceDayData.todayHours ?? attendanceDayData.totalHours ?? 0);
+      // Get today's hours from the improved backend stats endpoint
+      let todayHours = 0;
+      
+      if (attendanceDayData) {
+        // The backend now handles current session calculation for day period
+        const totalHoursValue = attendanceDayData.totalHours;
+        const todayHoursValue = attendanceDayData.todayHours;
+        
+        todayHours = Number(totalHoursValue ?? todayHoursValue ?? 0);
+      }
+      
       const weekHours = Number(attendanceWeekData.totalHours ?? 0);
       const monthHours = Number(attendanceMonthData.totalHours ?? 0);
 
-      // Calculate efficiency from ticket completion rate
-      let efficiency = 0;
-      if (completedTickets > 0 && activeTickets >= 0) {
-        const totalTickets = activeTickets + completedTickets;
-        efficiency = totalTickets > 0 ? Math.round((completedTickets / totalTickets) * 100) : 0;
-      }
+      // Calculate pending activities from activity stats
+      const totalActivities = activityDayData.totalActivities || 0;
+      const completedActivities = activityDayData.completedActivities || 0;
+      const pendingActivities = totalActivities;
 
-      // Use real pending activities from activity day stats
-      const pendingActivities = Number(activityDayData.totalActivities ?? 0);
-
-      setStats({
+      // Update stats with the calculated values
+      const newStats = {
         todayHours,
         weekHours,
         monthHours,
         activeTickets,
         completedTickets,
         pendingActivities,
-        efficiency
-      });
+        activityStats: activityDayData
+      };
+      
+      setStats(newStats);
 
       // Ensure we have valid ticket data before slicing
       const recentTicketsToSet = Array.isArray(ticketsData) 
@@ -289,25 +385,13 @@ export default function ServicePersonDashboardPage() {
             .slice(0, 10) // Limit to 10 most recent
         : [];
       
-      console.log('Final tickets to set:', recentTicketsToSet);
-      console.log('Final notifications to set:', notificationsToSet);
-      console.log('Current state before update - notifications:', notifications);
-      
       setRecentTickets(recentTicketsToSet);
       setNotifications(notificationsToSet);
-      
-      // Log after state update (will be visible in next render)
-      setTimeout(() => {
-        console.log('State after update - notifications:', notifications);
-      }, 0);
 
       // Don't override attendance status if it was already set by the API call
       // This was causing the issue - removing the fallback that overrides the API response
 
-      console.log('Dashboard data loaded successfully');
-
     } catch (error) {
-      console.error('Error fetching dashboard data:', error);
       toast({
         title: "Error",
         description: "Failed to load dashboard data. Please try again.",
@@ -316,7 +400,7 @@ export default function ServicePersonDashboardPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
 
   // Mark notification as read
   const markNotificationRead = async (notificationId: number) => {
@@ -328,33 +412,41 @@ export default function ServicePersonDashboardPage() {
         )
       );
     } catch (error) {
-      console.error('Error marking notification as read:', error);
+      // Silently handle error
     }
   };
 
   // Refresh attendance status
   const refreshAttendanceStatus = async () => {
     try {
-      console.log('Making API call to /attendance/status...');
       const response = await apiClient.get('/attendance/status');
-      console.log('Dashboard - Full response:', response);
       setAttendanceStatus((response as any)?.data ?? response);
     } catch (error: any) {
-      console.error('Error fetching attendance status:', error);
-      console.error('Error details:', (error as any).response || error);
       // Set default status on error
       setAttendanceStatus({ isCheckedIn: false });
     }
   };
 
   useEffect(() => {
-    fetchDashboardData();
+    const initializeData = async () => {
+      await fetchDashboardData();
+      // Fetch activities after dashboard data is loaded
+      await refreshActivityData();
+    };
     
-    // Set up periodic refresh for attendance status
-    const interval = setInterval(refreshAttendanceStatus, 30000); // Refresh every 30 seconds
+    initializeData();
     
-    return () => clearInterval(interval);
-  }, []);
+    // Set up periodic refresh for both attendance status and dashboard data
+    const statusInterval = setInterval(refreshAttendanceStatus, 30000); // Refresh every 30 seconds
+    const dataInterval = setInterval(fetchDashboardData, 60000); // Refresh dashboard every 60 seconds
+    const activitiesInterval = setInterval(refreshActivityData, 60000); // Refresh activities every 60 seconds
+    
+    return () => {
+      clearInterval(statusInterval);
+      clearInterval(dataInterval);
+      clearInterval(activitiesInterval);
+    };
+  }, [fetchDashboardData, refreshActivityData]);
 
   if (loading) {
     return (
@@ -368,36 +460,34 @@ export default function ServicePersonDashboardPage() {
 
   return (
     <div className="container mx-auto p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Service Dashboard</h1>
-          <p className="text-gray-600 mt-1">Welcome back! Here's your daily overview.</p>
-        </div>
-        <div className="flex items-center gap-4">
-          {attendanceStatus?.isCheckedIn && (
-            <Badge variant="default" className="text-sm bg-green-600">
-              <CheckCircle className="h-3 w-3 mr-1" />
-              Checked In
+      {/* Modern Header with Gradient */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-600 via-purple-600 to-indigo-800 p-8 text-white shadow-2xl">
+        <div className="absolute inset-0 bg-black/10"></div>
+        <div className="absolute -top-4 -right-4 w-32 h-32 bg-white/10 rounded-full blur-xl"></div>
+        <div className="absolute -bottom-8 -left-8 w-40 h-40 bg-white/5 rounded-full blur-2xl"></div>
+        <div className="relative flex items-center justify-between">
+          <div>
+            <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-white to-blue-100 bg-clip-text text-transparent">
+              Service Dashboard
+            </h1>
+            <p className="text-blue-100 text-lg">Welcome back! Here's your daily overview.</p>
+          </div>
+          <div className="flex items-center gap-4">
+            {attendanceStatus?.isCheckedIn && (
+              <Badge className="text-sm bg-emerald-500/20 text-emerald-100 border-emerald-400/30 backdrop-blur-sm">
+                <CheckCircle className="h-3 w-3 mr-1" />
+                Checked In
+              </Badge>
+            )}
+            <Badge className="text-sm bg-white/10 text-white border-white/20 backdrop-blur-sm">
+              {new Date().toLocaleDateString('en-US', { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+              })}
             </Badge>
-          )}
-          <Button 
-            onClick={refreshAttendanceStatus} 
-            variant="outline" 
-            size="sm"
-            className="text-xs"
-          >
-            <RefreshCw className="h-3 w-3 mr-1" />
-            Refresh Status
-          </Button>
-          <Badge variant="outline" className="text-sm">
-            {new Date().toLocaleDateString('en-US', { 
-              weekday: 'long', 
-              year: 'numeric', 
-              month: 'long', 
-              day: 'numeric' 
-            })}
-          </Badge>
+          </div>
         </div>
       </div>
 
@@ -455,56 +545,53 @@ export default function ServicePersonDashboardPage() {
         </Card>
       )}
 
-      {/* Quick Stats */}
+      {/* Colorful Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card>
+        <Card className="bg-gradient-to-br from-blue-50 to-cyan-100 border-blue-200 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Today's Hours</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium text-blue-800">Today's Hours</CardTitle>
+            <div className="p-2 bg-blue-500 rounded-full">
+              <Clock className="h-4 w-4 text-white" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats?.todayHours?.toFixed(1) || '0.0'}h</div>
-            <p className="text-xs text-muted-foreground">
+            <div className="text-3xl font-bold text-blue-900">{stats?.todayHours?.toFixed(1) || '0.0'}h</div>
+            <p className="text-xs text-blue-600 mt-1">
               {stats?.weekHours?.toFixed(1) || '0.0'}h this week
             </p>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="bg-gradient-to-br from-emerald-50 to-green-100 border-emerald-200 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Tickets</CardTitle>
-            <Ticket className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium text-emerald-800">Active Tickets</CardTitle>
+            <div className="p-2 bg-emerald-500 rounded-full">
+              <Ticket className="h-4 w-4 text-white" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats?.activeTickets || 0}</div>
-            <p className="text-xs text-muted-foreground">
+            <div className="text-3xl font-bold text-emerald-900">{stats?.activeTickets || 0}</div>
+            <p className="text-xs text-emerald-600 mt-1">
               {stats?.completedTickets || 0} completed this month
             </p>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="bg-gradient-to-br from-orange-50 to-amber-100 border-orange-200 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Efficiency Score</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium text-orange-800">Today's Activities</CardTitle>
+            <div className="p-2 bg-orange-500 rounded-full">
+              <Activity className="h-4 w-4 text-white" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats?.efficiency || 0}%</div>
-            <p className="text-xs text-muted-foreground">
-              {stats?.efficiency && stats.efficiency > 85 ? 'Excellent' : 'Good'} performance
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Today's Activities</CardTitle>
-            <Activity className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats?.pendingActivities || 0}</div>
-            <p className="text-xs text-muted-foreground">
-              {attendanceStatus?.isCheckedIn ? 'Activities logged today' : 'Check-in required to log activities'}
+            <div className="text-3xl font-bold text-orange-900">
+              {stats?.activityStats?.completedActivities || 0}
+            </div>
+            <p className="text-xs text-orange-600 mt-1">
+              {attendanceStatus?.isCheckedIn 
+                ? `Activities completed today` 
+                : 'Check-in required to log activities'}
             </p>
           </CardContent>
         </Card>
@@ -518,12 +605,11 @@ export default function ServicePersonDashboardPage() {
           <AttendanceWidget onStatusChange={refreshAttendanceStatus} />
           
           {/* Activity Logger */}
-          {(() => {
-            console.log('Dashboard - Current attendanceStatus:', attendanceStatus);
-            return null;
-          })()}
           {attendanceStatus?.isCheckedIn ? (
-            <ActivityLogger />
+            <ActivityLogger 
+              activities={activities} 
+              onActivityChange={refreshActivityData} 
+            />
           ) : (
             <Card className="border-gray-200">
               <CardHeader>
@@ -561,15 +647,17 @@ export default function ServicePersonDashboardPage() {
         {/* Right Column - Tickets & Notifications */}
         <div className="space-y-6">
           {/* Recent Tickets */}
-          <Card>
-            <CardHeader>
+          <Card className="shadow-lg border-0 bg-gradient-to-br from-white to-slate-50">
+            <CardHeader className="bg-gradient-to-r from-slate-50 to-gray-100 rounded-t-lg">
               <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2">
-                  <Ticket className="h-5 w-5" />
+                <CardTitle className="flex items-center gap-2 text-slate-800">
+                  <div className="p-2 bg-slate-600 rounded-full">
+                    <Ticket className="h-4 w-4 text-white" />
+                  </div>
                   Recent Tickets
                 </CardTitle>
-                <Link href="/dashboard/service-person/tickets">
-                  <Button variant="ghost" size="sm">
+                <Link href="/service-person/tickets">
+                  <Button variant="ghost" size="sm" className="text-slate-600 hover:text-slate-800 hover:bg-slate-200">
                     View All
                     <ArrowRight className="h-4 w-4 ml-1" />
                   </Button>
@@ -586,7 +674,7 @@ export default function ServicePersonDashboardPage() {
                 recentTickets.map((ticket) => (
                   <Link 
                     key={ticket.id} 
-                    href={`/dashboard/service-person/tickets`}
+                    href={`/service-person/tickets/${ticket.id}/list`}
                     className="block"
                   >
                     <div className="p-3 border rounded-lg hover:bg-gray-50 transition-colors">
@@ -595,11 +683,11 @@ export default function ServicePersonDashboardPage() {
                           #{ticket.id} - {ticket.title}
                         </h4>
                         <div className="flex gap-1">
-                          <Badge className={`text-xs ${STATUS_CONFIG[ticket.status].color}`}>
-                            {STATUS_CONFIG[ticket.status].label}
+                          <Badge className={`text-xs ${(STATUS_CONFIG[ticket.status] || STATUS_CONFIG.DEFAULT).color}`}>
+                            {(STATUS_CONFIG[ticket.status] || STATUS_CONFIG.DEFAULT).label}
                           </Badge>
-                          <Badge className={`text-xs ${PRIORITY_CONFIG[ticket.priority].color}`}>
-                            {PRIORITY_CONFIG[ticket.priority].label}
+                          <Badge className={`text-xs ${(PRIORITY_CONFIG[ticket.priority] || PRIORITY_CONFIG.MEDIUM).color}`}>
+                            {(PRIORITY_CONFIG[ticket.priority] || PRIORITY_CONFIG.MEDIUM).label}
                           </Badge>
                         </div>
                       </div>
@@ -618,16 +706,15 @@ export default function ServicePersonDashboardPage() {
           </Card>
 
           {/* Notifications */}
-          <Card>
-            <CardHeader>
+          <Card className="shadow-lg border-0 bg-gradient-to-br from-white to-blue-50">
+            <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-100 rounded-t-lg">
               <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2">
-                  <Bell className="h-5 w-5" />
+                <CardTitle className="flex items-center gap-2 text-blue-800">
+                  <div className="p-2 bg-blue-600 rounded-full">
+                    <Bell className="h-4 w-4 text-white" />
+                  </div>
                   Recent Notifications
                 </CardTitle>
-                <Button variant="ghost" size="sm" onClick={() => fetchDashboardData()}>
-                  <RefreshCw className="h-4 w-4" />
-                </Button>
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -664,24 +751,30 @@ export default function ServicePersonDashboardPage() {
           </Card>
 
           {/* Quick Actions */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Target className="h-5 w-5" />
+          <Card className="shadow-lg border border-gray-200 bg-white">
+            <CardHeader className="pb-4">
+              <CardTitle className="flex items-center gap-2 text-gray-800">
+                <Target className="h-5 w-5 text-blue-600" />
                 Quick Actions
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <Link href="/dashboard/service-person/tickets">
-                <Button className="w-full justify-start" variant="outline">
-                  <Ticket className="h-4 w-4 mr-2" />
+              <Link href="/service-person/tickets" className="block">
+                <Button className="w-full justify-start h-12 bg-blue-600 hover:bg-blue-700 text-white shadow-sm hover:shadow-md transition-all duration-200">
+                  <Ticket className="h-5 w-5 mr-3" />
                   View My Tickets
                 </Button>
               </Link>
-              <Link href="/dashboard/service-person/reports">
-                <Button className="w-full justify-start" variant="outline">
-                  <Award className="h-4 w-4 mr-2" />
+              <Link href="/service-person/reports" className="block">
+                <Button className="w-full justify-start h-12 bg-purple-600 hover:bg-purple-700 text-white shadow-sm hover:shadow-md transition-all duration-200">
+                  <Award className="h-5 w-5 mr-3" />
                   Performance Reports
+                </Button>
+              </Link>
+              <Link href="/service-person/dashboard" className="block">
+                <Button variant="outline" className="w-full justify-start h-12 border-gray-300 hover:bg-gray-50 transition-all duration-200">
+                  <Activity className="h-5 w-5 mr-3 text-gray-600" />
+                  Dashboard Overview
                 </Button>
               </Link>
             </CardContent>

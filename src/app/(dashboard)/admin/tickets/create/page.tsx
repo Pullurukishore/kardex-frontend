@@ -28,7 +28,7 @@ const formSchema = z.object({
   priority: z.enum(['LOW', 'MEDIUM', 'HIGH']).default('MEDIUM'),
   customerId: z.string().min(1, 'Customer is required'),
   contactId: z.string().min(1, 'Contact person is required'),
-  assetId: z.string().optional(),
+  assetId: z.string().min(1, 'Asset is required'),
   zoneId: z.number({
     required_error: 'Zone is required',
     invalid_type_error: 'Please select a zone'
@@ -223,6 +223,11 @@ export default function CreateTicketPage() {
         if (selectedCustomer.contacts?.length === 1) {
           form.setValue('contactId', selectedCustomer.contacts[0].id.toString());
         }
+        
+        // If there's only one asset, auto-select it (since asset is now required)
+        if (selectedCustomer.assets?.length === 1) {
+          form.setValue('assetId', selectedCustomer.assets[0].id.toString());
+        }
       }
     };
 
@@ -369,7 +374,7 @@ export default function CreateTicketPage() {
         // Convert string IDs to numbers for the API
         customerId: parseInt(values.customerId),
         contactId: parseInt(values.contactId),
-        assetId: values.assetId ? parseInt(values.assetId) : undefined,
+        assetId: parseInt(values.assetId),
         // zoneId is already a number, no need to parse
         relatedMachineIds: values.relatedMachineIds 
           ? values.relatedMachineIds.split(',').map((id: string) => id.trim())

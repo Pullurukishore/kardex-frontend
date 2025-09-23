@@ -31,9 +31,10 @@ interface TicketBasicInfoFormProps {
   control: Control<any>;
   zones: Zone[];
   isSubmitting: boolean;
+  hideZoneSelector?: boolean;
 }
 
-export function TicketBasicInfoForm({ control, zones, isSubmitting }: TicketBasicInfoFormProps) {
+export function TicketBasicInfoForm({ control, zones, isSubmitting, hideZoneSelector = false }: TicketBasicInfoFormProps) {
   return (
     <Card className="shadow-lg border-0 bg-gradient-to-br from-white to-gray-50">
       <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-t-lg border-b">
@@ -101,8 +102,8 @@ export function TicketBasicInfoForm({ control, zones, isSubmitting }: TicketBasi
                   disabled={isSubmitting}
                 >
                   <FormControl>
-                    <SelectTrigger className="focus:ring-2 focus:ring-orange-500 focus:border-orange-500">
-                      <SelectValue placeholder="Select priority" />
+                    <SelectTrigger className="w-full" disabled={hideZoneSelector || isSubmitting}>
+                      <SelectValue placeholder={hideZoneSelector ? zones[0]?.name || 'Loading...' : 'Select priority'} />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
@@ -134,42 +135,56 @@ export function TicketBasicInfoForm({ control, zones, isSubmitting }: TicketBasi
           <FormField
             control={control}
             name="zoneId"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel className="flex items-center space-x-2">
-                  <MapPin className="h-4 w-4 text-blue-500" />
-                  <span>Service Zone</span>
-                </FormLabel>
-                <Select 
-                  onValueChange={(value) => field.onChange(Number(value))} 
-                  value={field.value?.toString()}
-                  disabled={isSubmitting || zones.length === 0}
-                >
-                  <FormControl>
-                    <SelectTrigger className="focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                      <SelectValue placeholder={zones.length === 0 ? 'No zones available' : 'Select service zone'} />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {Array.isArray(zones) && zones.length > 0 ? (
-                      zones.filter(zone => zone.isActive).map((zone) => (
-                        <SelectItem key={zone.id} value={zone.id.toString()}>
-                          <div className="flex items-center space-x-2">
-                            <MapPin className="h-3 w-3 text-blue-500" />
-                            <span>{zone.name}</span>
-                          </div>
-                        </SelectItem>
-                      ))
-                    ) : (
-                      <SelectItem value="" disabled>
-                        No active zones available
-                      </SelectItem>
-                    )}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
+            render={({ field }) => {
+              const selectedZone = zones.find(zone => zone.id === field.value);
+              
+              return (
+                <FormItem>
+                  <FormLabel className="flex items-center space-x-2">
+                    <MapPin className="h-4 w-4 text-blue-500" />
+                    <span>Service Zone</span>
+                  </FormLabel>
+                  
+                  {hideZoneSelector ? (
+                    <div className="flex items-center space-x-2 p-2 border rounded-md bg-gray-50 text-gray-700">
+                      <MapPin className="h-4 w-4 text-blue-500 flex-shrink-0" />
+                      <span className="font-medium">
+                        {selectedZone?.name || 'No zone selected'}
+                      </span>
+                    </div>
+                  ) : (
+                    <Select 
+                      onValueChange={(value) => field.onChange(Number(value))} 
+                      value={field.value?.toString()}
+                      disabled={isSubmitting || zones.length === 0}
+                    >
+                      <FormControl>
+                        <SelectTrigger className="focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                          <SelectValue placeholder={zones.length === 0 ? 'No zones available' : 'Select service zone'} />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {Array.isArray(zones) && zones.length > 0 ? (
+                          zones.filter(zone => zone.isActive).map((zone) => (
+                            <SelectItem key={zone.id} value={zone.id.toString()}>
+                              <div className="flex items-center space-x-2">
+                                <MapPin className="h-3 w-3 text-blue-500" />
+                                <span>{zone.name}</span>
+                              </div>
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <SelectItem value="" disabled>
+                            No active zones available
+                          </SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
+                  )}
+                  <FormMessage />
+                </FormItem>
+              );
+            }}
           />
         </div>
       </CardContent>

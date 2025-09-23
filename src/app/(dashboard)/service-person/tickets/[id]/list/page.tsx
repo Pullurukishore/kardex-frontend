@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -28,6 +29,7 @@ import { TicketDetails } from '@/components/tickets/TicketDetails';
 import { AssignTicketDialog } from '@/components/tickets/AssignTicketDialog';
 import { StatusChangeDialog, TicketStatus, TicketStatusType } from '@/components/tickets/StatusChangeDialog';
 import { TicketReports } from '@/components/tickets/TicketReports';
+import { StatusHistoryItem } from '@/components/tickets/StatusHistoryItem';
 import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
@@ -36,6 +38,7 @@ export default function TicketDetailPage() {
   const { id } = useParams();
   const router = useRouter();
   const { toast } = useToast();
+  const { user } = useAuth();
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'details' | 'activity' | 'comments' | 'reports'>('details');
@@ -84,13 +87,14 @@ export default function TicketDetailPage() {
     }
   }, [id, router, toast]);
 
-  const handleStatusChange = async (status: string, comments?: string) => {
+  const handleStatusChange = async (status: string, comments?: string, location?: { latitude: number; longitude: number; address?: string; timestamp: string }) => {
     if (!ticket) return;
     
     try {
       await api.patch(`/tickets/${ticket.id}/status`, { 
         status,
-        comments: comments || `Status changed to ${status}`
+        comments: comments || `Status changed to ${status}`,
+        location
       });
       
       await fetchTicketDetails();
@@ -281,7 +285,7 @@ export default function TicketDetailPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <TicketActivity ticketId={ticket.id} />
+              <TicketActivity ticketId={ticket.id} ticket={ticket} />
             </CardContent>
           </Card>
         </div>
@@ -357,6 +361,9 @@ export default function TicketDetailPage() {
                         </Avatar>
                         <div className="flex flex-col">
                           <span>{ticket.subOwner.name || 'No name'}</span>
+                          {ticket.zone?.name && (
+                            <span className="text-xs text-emerald-600 font-medium">Zone: {ticket.zone.name}</span>
+                          )}
                           {ticket.subOwner.phone && (
                             <span className="text-xs text-muted-foreground">{ticket.subOwner.phone}</span>
                           )}
@@ -380,6 +387,9 @@ export default function TicketDetailPage() {
                         </Avatar>
                         <div className="flex flex-col">
                           <span>{ticket.assignedTo.name || 'No name'}</span>
+                          {ticket.zone?.name && (
+                            <span className="text-xs text-blue-600 font-medium">Zone: {ticket.zone.name}</span>
+                          )}
                           {ticket.assignedTo.phone && (
                             <span className="text-xs text-muted-foreground">{ticket.assignedTo.phone}</span>
                           )}
@@ -412,7 +422,64 @@ export default function TicketDetailPage() {
 
               <div className="space-y-3 pt-4">
                 <div className="text-sm font-medium text-muted-foreground mb-2">Quick Actions</div>
-                <div className="text-sm text-muted-foreground">No quick actions available</div>
+                <Button 
+                  onClick={() => {
+                    // Open dialog for zone user assignment
+                    setAssignmentStep('ZONE_USER');
+                    setIsAssignDialogOpen(true);
+                  }}
+                  disabled={!ticket}
+                  variant="outline"
+                  className="w-full justify-start h-12 bg-gradient-to-r from-emerald-50 to-teal-50 hover:from-emerald-100 hover:to-teal-100 border-emerald-200 hover:border-emerald-300 text-emerald-700 hover:text-emerald-800 transition-all duration-200 shadow-sm hover:shadow-md group"
+                >
+                  <div className="flex items-center">
+                    <div className="p-1.5 rounded-full bg-emerald-100 group-hover:bg-emerald-200 mr-3 transition-colors">
+                      <UserPlus className="h-4 w-4" />
+                    </div>
+                    <div className="text-left">
+                      <div className="font-medium">Assign to Zone User</div>
+                      <div className="text-xs text-emerald-600 opacity-80">Delegate to zone coordinator</div>
+                    </div>
+                  </div>
+                </Button>
+                <Button 
+                  onClick={async () => {
+                    try {
+                      // Directly open service person selection
+                      const servicePersons = await api.get('/service-persons');
+                      if (servicePersons.data.length === 0) {
+                        toast({
+                          title: 'No Service Persons',
+                          description: 'There are no service persons available for assignment',
+                          variant: 'destructive',
+                        });
+                        return;
+                      }
+                      setAssignmentStep('SERVICE_PERSON');
+                      setIsAssignDialogOpen(true);
+                    } catch (error) {
+                      console.error('Error fetching service persons:', error);
+                      toast({
+                        title: 'Error',
+                        description: 'Failed to load service persons. Please try again.',
+                        variant: 'destructive',
+                      });
+                    }
+                  }}
+                  disabled={!ticket}
+                  variant="outline"
+                  className="w-full justify-start h-12 bg-gradient-to-r from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100 border-blue-200 hover:border-blue-300 text-blue-700 hover:text-blue-800 transition-all duration-200 shadow-sm hover:shadow-md group"
+                >
+                  <div className="flex items-center">
+                    <div className="p-1.5 rounded-full bg-blue-100 group-hover:bg-blue-200 mr-3 transition-colors">
+                      <Wrench className="h-4 w-4" />
+                    </div>
+                    <div className="text-left">
+                      <div className="font-medium">Assign to Service Person</div>
+                      <div className="text-xs text-blue-600 opacity-80">Send to field technician</div>
+                    </div>
+                  </div>
+                </Button>
               </div>
             </CardContent>
           </Card>
@@ -422,11 +489,11 @@ export default function TicketDetailPage() {
               <CardTitle className="text-purple-900">Status History</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {ticket.statusHistory?.length ? (
                   <div className="space-y-3">
-                    {ticket.statusHistory.slice(0, 5).map((history, index) => (
-                      <div key={history.id} className="flex items-start space-x-3">
+                    {ticket.statusHistory.map((history, index) => (
+                      <div key={history.id} className="flex items-start space-x-3 pb-3 border-b border-gray-100 last:border-b-0">
                         <div className="flex-shrink-0 h-8 w-8 rounded-full bg-background flex items-center justify-center border">
                           {index === 0 ? (
                             <CheckCircle className="h-4 w-4 text-green-500" />
@@ -435,30 +502,51 @@ export default function TicketDetailPage() {
                           )}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center space-x-2 mb-1">
-                            <Avatar className="h-5 w-5">
-                              <AvatarFallback className="text-xs">
-                                {history.changedBy?.name?.charAt(0) || history.changedBy?.email?.charAt(0) || 'U'}
-                              </AvatarFallback>
-                            </Avatar>
-                            <span className="text-sm font-medium">
-                              {history.changedBy?.name || history.changedBy?.email?.split('@')[0] || 'Unknown User'}
+                          <div className="flex items-center justify-between mb-1">
+                            <div className="flex items-center space-x-2">
+                              <StatusBadge status={history.status} />
+                              <div className="flex flex-col">
+                                <span className="text-sm text-muted-foreground">
+                                  by {history.changedBy?.name || history.changedBy?.email?.split('@')[0] || 'Unknown'}
+                                </span>
+                                {ticket.zone?.name && (history.changedBy?.role === 'ZONE_USER' || history.changedBy?.role === 'SERVICE_PERSON') && (
+                                  <span className="text-xs text-muted-foreground">Zone: {ticket.zone.name}</span>
+                                )}
+                              </div>
+                            </div>
+                            <span className="text-xs text-muted-foreground">
+                              {format(new Date(history.changedAt), 'MMM d, h:mm a')}
                             </span>
-                            <Badge variant="secondary" className="text-xs">
-                              {history.changedBy?.role?.replace('_', ' ').toLowerCase() || 'user'}
-                            </Badge>
                           </div>
-                          <p className="text-sm">
-                            Changed status to <StatusBadge status={history.status} />
-                          </p>
-                          {history.notes && (
-                            <p className="text-xs text-muted-foreground italic mt-1">
-                              "{history.notes}"
-                            </p>
-                          )}
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {format(new Date(history.changedAt), 'MMM d, yyyy h:mm a')}
-                          </p>
+                          <div className="mt-1 space-y-1">
+                            {history.notes && (
+                              <p className="text-xs text-muted-foreground">
+                                {history.notes.split('\n\n')[0]}
+                              </p>
+                            )}
+                            {history.location && (
+                              <div className="flex items-start mt-1 text-xs text-muted-foreground">
+                                <MapPin className="h-3 w-3 mt-0.5 mr-1 flex-shrink-0" />
+                                <div>
+                                  <p className="font-medium">Location:</p>
+                                  {history.location.address ? (
+                                    <p>{history.location.address}</p>
+                                  ) : history.location.latitude && history.location.longitude ? (
+                                    <p>
+                                      {history.location.latitude.toFixed(6)}, {history.location.longitude.toFixed(6)}
+                                    </p>
+                                  ) : (
+                                    <p>Location data available</p>
+                                  )}
+                                  {history.location.timestamp && (
+                                    <p className="text-[10px] opacity-75">
+                                      {format(new Date(history.location.timestamp), 'MMM d, h:mm a')}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -497,6 +585,7 @@ export default function TicketDetailPage() {
         isOpen={isStatusDialogOpen}
         onClose={() => setIsStatusDialogOpen(false)}
         currentStatus={ticket.status}
+        userRole={user?.role}
         onStatusChange={handleStatusChange}
       />
     </div>

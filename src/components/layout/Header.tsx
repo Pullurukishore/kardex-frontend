@@ -1,7 +1,7 @@
 'use client';
 
 import { useAuth } from '@/contexts/AuthContext';
-import { Menu, LogOut, User, Settings, ChevronDown, Zap, Activity } from 'lucide-react';
+import { Menu, LogOut, User, ChevronDown, Zap, Activity } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -255,13 +255,6 @@ export function Header({ onMenuClick, className }: HeaderProps) {
                   <a href="/profile" className="flex w-full items-center px-3 py-2 rounded-lg text-slate-600 hover:text-slate-800 hover:bg-purple-50 transition-all duration-200 group">
                     <User className="mr-3 h-4 w-4 group-hover:text-purple-600 transition-colors" />
                     <span>Profile Settings</span>
-                  </a>
-                </DropdownMenuItem>
-                
-                <DropdownMenuItem asChild>
-                  <a href="/profile" className="flex w-full items-center px-3 py-2 rounded-lg text-slate-600 hover:text-slate-800 hover:bg-purple-50 transition-all duration-200 group">
-                    <Settings className="mr-3 h-4 w-4 group-hover:text-purple-600 transition-colors" />
-                    <span>Preferences</span>
                   </a>
                 </DropdownMenuItem>
                 

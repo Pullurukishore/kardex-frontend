@@ -234,6 +234,10 @@ export default function AttendanceDetailView({
   const isAutoCheckout = attendance.notes?.includes('Auto-checkout');
   const activities = attendance.user.activityLogs || [];
   const gaps = attendance.gaps || [];
+  
+  console.log('[AttendanceDetailView] Attendance data:', attendance);
+  console.log('[AttendanceDetailView] Activities found:', activities);
+  console.log('[AttendanceDetailView] User object:', attendance.user);
 
   return (
     <div className="container mx-auto p-6 space-y-6">

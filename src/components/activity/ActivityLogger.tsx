@@ -1,19 +1,37 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
-import { useToast } from '@/components/ui/use-toast';
-import { 
-  Plus, 
-  Clock, 
-  MapPin, 
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+} from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/components/ui/use-toast";
+import {
+  Plus,
+  Clock,
+  MapPin,
   Activity,
   Loader2,
   Calendar,
@@ -21,9 +39,9 @@ import {
   FileText,
   Play,
   Square,
-  RefreshCw
-} from 'lucide-react';
-import api from '@/lib/api/axios';
+} from "lucide-react";
+import { apiClient } from "@/lib/api/api-client";
+import api from "@/lib/api/axios";
 
 interface ActivityLog {
   id: number;
@@ -34,143 +52,351 @@ interface ActivityLog {
   endTime?: string;
   duration?: number;
   location?: string;
+  latitude?: number;
+  longitude?: number;
   ticket?: {
     id: number;
     title: string;
-    customer: {
-      companyName: string;
+    status?: string;
+    priority?: string;
+    customer?: {
+      companyName?: string;
     };
+  };
+  user?: {
+    id: number;
+    name: string;
+    email: string;
   };
 }
 
 const ACTIVITY_TYPES = [
-  { value: 'TICKET_WORK', label: 'Ticket Work', icon: '🎫' },
-  { value: 'BD_VISIT', label: 'BD Visit', icon: '🏢' },
-  { value: 'PO_DISCUSSION', label: 'PO Discussion', icon: '💼' },
-  { value: 'SPARE_REPLACEMENT', label: 'Spare Replacement', icon: '🔧' },
-  { value: 'TRAVEL', label: 'Travel', icon: '🚗' },
-  { value: 'TRAINING', label: 'Training', icon: '📚' },
-  { value: 'MEETING', label: 'Meeting', icon: '👥' },
-  { value: 'MAINTENANCE', label: 'Maintenance', icon: '⚙️' },
-  { value: 'DOCUMENTATION', label: 'Documentation', icon: '📝' },
-  { value: 'OTHER', label: 'Other', icon: '📋' },
+  { value: "TICKET_WORK", label: "Ticket Work", icon: "🎫" },
+  { value: "BD_VISIT", label: "BD Visit", icon: "🏢" },
+  { value: "PO_DISCUSSION", label: "PO Discussion", icon: "💼" },
+  { value: "SPARE_REPLACEMENT", label: "Spare Replacement", icon: "🔧" },
+  { value: "TRAVEL", label: "Travel", icon: "🚗" },
+  { value: "TRAINING", label: "Training", icon: "📚" },
+  { value: "MEETING", label: "Meeting", icon: "👥" },
+  { value: "MAINTENANCE", label: "Maintenance", icon: "⚙️" },
+  { value: "DOCUMENTATION", label: "Documentation", icon: "📝" },
+  { value: "WORK_FROM_HOME", label: "Work From Home", icon: "🏠" },
+  { value: "OTHER", label: "Other", icon: "📋" },
 ];
 
-export function ActivityLogger() {
-  const [activities, setActivities] = useState<ActivityLog[]>([]);
+interface ActivityLoggerProps {
+  onActivityChange?: () => Promise<void> | void;
+  activities?: ActivityLog[];
+  isLoading?: boolean;
+  onRefresh?: () => Promise<void> | void;
+}
+
+interface ApiResponse {
+  activities: ActivityLog[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
+// Memoize the component to prevent unnecessary re-renders
+function ActivityLoggerComponent({
+  onActivityChange,
+  activities: propActivities,
+}: ActivityLoggerProps) {
+  const [activities, setActivities] = useState<ActivityLog[]>(
+    propActivities || []
+  );
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [activeActivity, setActiveActivity] = useState<ActivityLog | null>(null);
+  const [activeActivity, setActiveActivity] = useState<ActivityLog | null>(
+    null
+  );
+  const [currentTime, setCurrentTime] = useState(new Date());
   const { toast } = useToast();
+
+  // Fallback timeout to prevent infinite loading
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      if (loading) {
+        setLoading(false);
+      }
+    }, 10000); // 10 second timeout
+
+    return () => clearTimeout(timeout);
+  }, [loading]);
+
+  // Track if we've already triggered an activity change in the current render cycle
+  const activityChangeInProgress = useRef(false);
+  const lastFetchTime = useRef(0);
+  const justEndedActivity = useRef(false);
+  const FETCH_COOLDOWN = 2000; // 2 seconds cooldown between fetches
 
   // Form state
   const [formData, setFormData] = useState({
-    activityType: '',
-    title: '',
-    description: '',
-    location: '',
-    ticketId: '',
+    activityType: "",
+    title: "",
+    ticketId: "",
   });
 
-  // Fetch recent activities
-  const fetchActivities = async () => {
+  // Location state for activity logging
+  const [activityLocation, setActivityLocation] = useState<{
+    lat: number;
+    lng: number;
+    address: string;
+  } | null>(null);
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
+
+  // Tickets state for dropdown
+  const [activeTickets, setActiveTickets] = useState<
+    {
+      id: number;
+      title: string;
+      status?: string;
+      priority?: string;
+      customer?: { companyName?: string };
+    }[]
+  >([]);
+  const [ticketsLoading, setTicketsLoading] = useState(false);
+
+  // Get current location for activity logging
+  const getCurrentLocationForActivity = async () => {
+    if (!navigator.geolocation) {
+      const errorMsg = "Geolocation is not supported by your browser.";
+      setLocationError(errorMsg);
+      return null;
+    }
+
+    setLocationLoading(true);
+    setLocationError(null);
+
+    try {
+      const position = await new Promise<GeolocationPosition>(
+        (resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 60000, // Allow 1 minute old location
+          });
+        }
+      );
+
+      const lat = position.coords.latitude;
+      const lng = position.coords.longitude;
+
+      // Create a basic address from coordinates
+      const address = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+
+      const locationData = { lat, lng, address };
+      setActivityLocation(locationData);
+      setLocationError(null);
+
+      return locationData;
+    } catch (error: any) {
+      let errorMessage = "Could not get your current location.";
+
+      if (error.code === 1) {
+        errorMessage =
+          "Location access denied. Please allow location permissions.";
+      } else if (error.code === 2) {
+        errorMessage =
+          "Location unavailable. Please check your GPS/network connection.";
+      } else if (error.code === 3) {
+        errorMessage = "Location request timed out. Please try again.";
+      }
+
+      setLocationError(errorMessage);
+      return null;
+    } finally {
+      setLocationLoading(false);
+    }
+  };
+
+  // Fetch activities from backend API with cooldown to prevent infinite loops
+  const fetchActivities = useCallback(async () => {
+    const now = Date.now();
+    // Skip cooldown if this is the first fetch (lastFetchTime is 0)
+    if (
+      lastFetchTime.current > 0 &&
+      now - lastFetchTime.current < FETCH_COOLDOWN
+    ) {
+      return activities; // Return current activities
+    }
+
+    lastFetchTime.current = now;
+
     try {
       setLoading(true);
-      const response = await api.get('/activities', {
-        params: {
-          limit: 10,
-          startDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(), // Last 7 days
-        },
-      });
-      setActivities(response.data.activities);
-      
-      // Find active activity (no end time)
-      const active = response.data.activities.find((activity: ActivityLog) => !activity.endTime);
-      setActiveActivity(active || null);
-    } catch (error) {
-      console.error('Error fetching activities:', error);
+
+      const response = await api.get("/activities");
+
+      // Parse response according to backend structure: { activities: [...], pagination: {...} }
+      const responseData = response.data;
+
+      const activitiesData = responseData?.activities || [];
+
+      // Update activities state - force update even if same data
+      setActivities([...activitiesData]);
+
+      // Find and set active activity (one without endTime)
+      const activeActivity = activitiesData.find(
+        (activity: ActivityLog) => !activity.endTime
+      );
+      setActiveActivity(activeActivity || null);
+
+      return activitiesData;
+    } catch (error: any) {
+      // Show user-friendly error message
+      const errorMessage =
+        error.response?.data?.error ||
+        error.message ||
+        "Failed to load activities";
       toast({
-        title: 'Error',
-        description: 'Failed to fetch activities',
-        variant: 'destructive',
+        title: "Error Loading Activities",
+        description: `${errorMessage} (Status: ${
+          error.response?.status || "Unknown"
+        })`,
+        variant: "destructive",
       });
+
+      // Don't clear activities on error, return current activities to maintain state
+      return activities;
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
+
+  // Fetch active tickets for dropdown
+  const fetchActiveTickets = useCallback(async () => {
+    try {
+      setTicketsLoading(true);
+
+      const response = await api.get("/tickets", {
+        params: {
+          assignedToMe: true,
+          limit: 50,
+        },
+      });
+
+      // Parse tickets from response
+      const responseData = response.data;
+      let ticketsData = [];
+
+      if (Array.isArray(responseData)) {
+        ticketsData = responseData;
+      } else if (responseData?.data && Array.isArray(responseData.data)) {
+        ticketsData = responseData.data;
+      } else if (responseData?.tickets && Array.isArray(responseData.tickets)) {
+        ticketsData = responseData.tickets;
+      }
+
+      // Filter for active tickets only (client-side filtering)
+      const activeTicketsData = ticketsData.filter(
+        (ticket: any) =>
+          ticket &&
+          ticket.status &&
+          ["OPEN", "IN_PROGRESS", "ASSIGNED"].includes(ticket.status)
+      );
+
+      setActiveTickets(activeTicketsData);
+    } catch (error: any) {
+      // Don't show error toast for tickets as it's not critical
+      setActiveTickets([]);
+    } finally {
+      setTicketsLoading(false);
+    }
+  }, []);
 
   // Start new activity
   const handleStartActivity = async () => {
     if (!formData.activityType || !formData.title) {
       toast({
-        title: 'Error',
-        description: 'Please fill in required fields',
-        variant: 'destructive',
+        title: "Error",
+        description: "Please fill in required fields (Activity Type and Title)",
+        variant: "destructive",
       });
       return;
     }
 
-    try {
-      setSubmitting(true);
+    setSubmitting(true);
 
-      // Get current location
-      let location = formData.location;
-      if (navigator.geolocation && !location) {
-        try {
-          const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-            navigator.geolocation.getCurrentPosition(resolve, reject, {
-              enableHighAccuracy: true,
-              timeout: 5000,
-            });
+    try {
+      // Get current location if not already available
+      let locationData = activityLocation;
+      if (!locationData) {
+        locationData = await getCurrentLocationForActivity();
+        if (!locationData) {
+          toast({
+            title: "Location Required",
+            description:
+              "Unable to get your location. Please allow location access to log activity.",
+            variant: "destructive",
           });
-          location = `${position.coords.latitude.toFixed(6)}, ${position.coords.longitude.toFixed(6)}`;
-        } catch (error) {
-          console.log('Could not get location:', error);
+          setSubmitting(false);
+          return;
         }
       }
 
-      const response = await api.post('/activities', {
+      // Prepare activity data for backend
+      const activityData = {
         activityType: formData.activityType,
         title: formData.title,
-        description: formData.description,
-        location,
+        latitude: locationData.lat,
+        longitude: locationData.lng,
         ticketId: formData.ticketId ? parseInt(formData.ticketId) : undefined,
         startTime: new Date().toISOString(),
-      });
+      };
 
-      setActiveActivity(response.data.activity);
-      setActivities(prev => [response.data.activity, ...prev]);
-      
-      // Reset form
+      // Create activity via backend API
+      const response = await api.post("/activities", activityData);
+
+      // Reset form and close dialog
       setFormData({
-        activityType: '',
-        title: '',
-        description: '',
-        location: '',
-        ticketId: '',
+        activityType: "",
+        title: "",
+        ticketId: "",
       });
+      setActivityLocation(null);
+      setLocationError(null);
       setDialogOpen(false);
 
+      // Refresh activities first
+      await fetchActivities();
+
+      // Notify parent component with delay to prevent rapid calls
+      setTimeout(async () => {
+        if (onActivityChange) {
+          await onActivityChange();
+        }
+      }, 500);
+
       toast({
-        title: 'Activity Started',
-        description: `Started "${formData.title}"`,
+        title: "Activity Started",
+        description: `Started "${formData.title}" successfully`,
       });
     } catch (error: any) {
-      console.error('Error starting activity:', error);
-      
-      // Handle specific check-in requirement error
-      if (error.response?.data?.error === 'Check-in required') {
+      // Handle specific error cases
+      if (error.response?.data?.error === "Check-in required") {
         toast({
-          title: 'Check-in Required',
-          description: error.response.data.message || 'You must check in before logging activities. Please check in first with your location.',
-          variant: 'destructive',
+          title: "Check-in Required",
+          description:
+            error.response.data.message ||
+            "You must check in before logging activities. Please check in first with your location.",
+          variant: "destructive",
         });
       } else {
+        const errorMessage =
+          error.response?.data?.error ||
+          error.message ||
+          "Failed to start activity";
         toast({
-          title: 'Error',
-          description: error.response?.data?.error || 'Failed to start activity',
-          variant: 'destructive',
+          title: "Error Starting Activity",
+          description: errorMessage,
+          variant: "destructive",
         });
       }
     } finally {
@@ -180,292 +406,818 @@ export function ActivityLogger() {
 
   // End active activity
   const handleEndActivity = async () => {
-    if (!activeActivity) return;
+    if (!activeActivity) {
+      toast({
+        title: "Error",
+        description: "No active activity to end.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     try {
       setSubmitting(true);
-      
+
+      // Store activity info for success message
+      const activityToEnd = { ...activeActivity };
+
+      // Make API call to end the activity
       const response = await api.put(`/activities/${activeActivity.id}`, {
         endTime: new Date().toISOString(),
       });
 
+      // Get updated activity data from response
+      const updatedActivity = response.data.activity || response.data;
+
+      // Immediately update local state for instant UI feedback
+      const endTime = new Date().toISOString();
+      const updatedActivityWithEndTime = {
+        ...activityToEnd,
+        endTime: endTime,
+        duration:
+          updatedActivity.duration ||
+          Math.round(
+            (new Date(endTime).getTime() -
+              new Date(activityToEnd.startTime).getTime()) /
+              (1000 * 60)
+          ),
+      };
+
+      // Set flag to prevent fetch from overriding local state
+      justEndedActivity.current = true;
+
+      // Clear active activity immediately
       setActiveActivity(null);
-      setActivities(prev => 
-        prev.map(activity => 
-          activity.id === activeActivity.id ? response.data.activity : activity
-        )
-      );
+
+      // Update activities list immediately - replace the ended activity
+      setActivities((prevActivities) => {
+        const updatedActivities = prevActivities.map((activity) =>
+          activity.id === activeActivity.id
+            ? updatedActivityWithEndTime
+            : activity
+        );
+        return [...updatedActivities]; // Create new array to force re-render
+      });
+
+      // Reset fetch cooldown to allow immediate refresh
+      lastFetchTime.current = 0;
+
+      // Reset flag after a delay to allow for proper state updates
+      setTimeout(() => {
+        justEndedActivity.current = false;
+      }, 2500);
+
+      // Show success message with duration if available
+      const durationText = updatedActivity.duration
+        ? `${updatedActivity.duration} minutes`
+        : "completed";
+      toast({
+        title: "Activity Completed",
+        description: `"${activityToEnd.title}" - ${durationText}`,
+      });
+
+      // Force refresh of activity data after a short delay
+      setTimeout(async () => {
+        // Reset cooldown to allow immediate refresh
+        lastFetchTime.current = 0;
+        
+        // Fetch fresh activities from backend
+        const freshActivities = await fetchActivities();
+        
+        // Notify parent to refresh dashboard stats
+        if (onActivityChange) {
+          await onActivityChange();
+        }
+      }, 1000);
+    } catch (error: any) {
+      // Determine appropriate error message
+      let errorMessage = "Failed to end activity";
+
+      if (error.response) {
+        errorMessage =
+          error.response.data?.error ||
+          error.response.data?.message ||
+          errorMessage;
+
+        if (error.response.status === 404) {
+          errorMessage = "Activity not found or already ended";
+        } else if (error.response.status === 400) {
+          errorMessage = "Invalid request - activity may already be completed";
+        } else if (error.response.status >= 500) {
+          errorMessage = "Server error. Please try again later.";
+        }
+      } else if (error.request) {
+        errorMessage =
+          "Network error. Please check your connection and try again.";
+      }
 
       toast({
-        title: 'Activity Completed',
-        description: `Completed "${activeActivity.title}" (${response.data.activity.duration} min)`,
-      });
-    } catch (error: any) {
-      console.error('Error ending activity:', error);
-      toast({
-        title: 'Error',
-        description: error.response?.data?.error || 'Failed to end activity',
-        variant: 'destructive',
+        title: "Error Ending Activity",
+        description: errorMessage,
+        variant: "destructive",
       });
     } finally {
       setSubmitting(false);
     }
   };
 
-  // Format duration
-  const formatDuration = (minutes?: number) => {
-    if (!minutes) return 'Ongoing';
+  // Format duration with live time calculation for ongoing activities
+  const formatDuration = (minutes?: number, ongoing?: boolean, startTime?: string, endTime?: string) => {
+    if (ongoing && startTime) {
+      // Calculate live duration for ongoing activities
+      const start = new Date(startTime);
+      const now = currentTime;
+      const diffMs = now.getTime() - start.getTime();
+      const diffMinutes = Math.floor(diffMs / (1000 * 60));
+      const diffSeconds = Math.floor((diffMs % (1000 * 60)) / 1000);
+      
+      if (diffMinutes < 60) {
+        return `${diffMinutes}m ${diffSeconds}s`;
+      }
+      const hours = Math.floor(diffMinutes / 60);
+      const mins = diffMinutes % 60;
+      return `${hours}h ${mins}m ${diffSeconds}s`;
+    }
+    
+    // If not ongoing, try to calculate duration from start/end times if duration is not provided
+    if (!ongoing && startTime && endTime && (!minutes || minutes <= 0)) {
+      const start = new Date(startTime);
+      const end = new Date(endTime);
+      const diffMs = end.getTime() - start.getTime();
+      const diffMinutes = Math.ceil(diffMs / (1000 * 60)); // Use ceil to round up to at least 1 minute
+      
+      // Always show at least 1 minute for any completed activity
+      const finalMinutes = Math.max(diffMinutes, 1);
+      
+      if (finalMinutes < 60) {
+        return `${finalMinutes}m`;
+      }
+      const hours = Math.floor(finalMinutes / 60);
+      const mins = finalMinutes % 60;
+      return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+    }
+    
+    if (ongoing) return "Ongoing";
+
+    // Check for valid duration - must be a positive number
+    if (minutes === undefined || minutes === null || minutes <= 0) {
+      return "N/A";
+    }
+
     if (minutes < 60) return `${minutes}m`;
     const hours = Math.floor(minutes / 60);
     const mins = minutes % 60;
-    return `${hours}h ${mins}m`;
+    return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
   };
 
   // Get activity type info
   const getActivityTypeInfo = (type: string) => {
-    return ACTIVITY_TYPES.find(t => t.value === type) || { label: type, icon: '📋' };
+    return (
+      ACTIVITY_TYPES.find((t) => t.value === type) || {
+        label: type,
+        icon: "📋",
+      }
+    );
   };
 
+  // Update activities when prop changes
   useEffect(() => {
-    fetchActivities();
+    // Don't override local state if we just ended an activity
+    if (justEndedActivity.current) {
+      return;
+    }
+
+    // Always use propActivities when provided, regardless of length
+    // This ensures parent component data is properly synchronized
+    if (propActivities !== undefined && Array.isArray(propActivities)) {
+      setActivities([...propActivities]); // Create new array to force re-render
+      setLoading(false);
+
+      // Find active activity from props
+      const activeActivity = propActivities.find(
+        (activity: ActivityLog) => !activity.endTime
+      );
+      setActiveActivity(activeActivity || null);
+    }
+    // Don't fetch activities here to avoid infinite loops
+    // Let the initial load effect handle fetching when no props are provided
+  }, [propActivities]);
+
+  // Handle activity changes and refresh data
+  const handleActivityChange = useCallback(async () => {
+    if (activityChangeInProgress.current) {
+      return;
+    }
+
+    try {
+      activityChangeInProgress.current = true;
+
+      // Only notify parent component, don't fetch activities here to avoid loops
+      if (onActivityChange) {
+        await onActivityChange();
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description:
+          error.response?.data?.message || "Failed to update activities",
+        variant: "destructive",
+      });
+    } finally {
+      // Reset the flag after a longer delay to prevent rapid successive calls
+      setTimeout(() => {
+        activityChangeInProgress.current = false;
+      }, 1000); // Increased to 1 second
+    }
+  }, [onActivityChange, toast]);
+
+  // Timer for live duration updates
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000); // Update every second
+
+    return () => clearInterval(timer);
   }, []);
 
-  return (
-    <Card className="w-full">
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
-            <Activity className="h-5 w-5" />
-            Activity Log
-          </CardTitle>
-          <div className="flex gap-2">
-            <Button
-              onClick={fetchActivities}
-              disabled={loading}
-              variant="outline"
-              size="sm"
-            >
-              {loading ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4 mr-2" />
-              )}
-              Refresh
-            </Button>
-            {activeActivity && (
-              <Button
-                onClick={handleEndActivity}
-                disabled={submitting}
-                variant="destructive"
-                size="sm"
-              >
-                {submitting ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <Square className="h-4 w-4 mr-2" />
-                )}
-                End Activity
-              </Button>
-            )}
-            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-              <DialogTrigger asChild>
-                <Button size="sm" disabled={!!activeActivity}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Log Activity
+  // Initial load - only run once on mount when no props are provided
+  useEffect(() => {
+    let mounted = true;
+
+    const loadData = async () => {
+      if (!mounted) return;
+
+      // Only fetch activities if no props are provided
+      // If props are provided, the propActivities useEffect will handle the data
+      if (!propActivities || !Array.isArray(propActivities)) {
+        try {
+          await fetchActivities();
+        } catch (error) {
+          if (mounted) {
+            setLoading(false);
+          }
+        }
+      } else {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+
+    return () => {
+      mounted = false;
+    };
+  }, []); // Empty dependency array - only run once on mount
+
+  // Force re-render if activities is not an array
+  if (!Array.isArray(activities)) {
+    setActivities([]);
+  }
+
+  // Memoize the component's JSX to prevent unnecessary re-renders
+  const activityLoggerContent = useMemo(
+    () => (
+      <Card className="w-full">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <Activity className="h-5 w-5" />
+              Activity Log
+            </CardTitle>
+            <div className="flex gap-2">
+              {activeActivity && (
+                <Button
+                  onClick={handleEndActivity}
+                  disabled={submitting}
+                  variant="destructive"
+                  size="sm"
+                >
+                  {submitting ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Square className="h-4 w-4 mr-2" />
+                  )}
+                  End Activity
                 </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[500px]">
-                <DialogHeader>
-                  <DialogTitle>Log New Activity</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="activityType">Activity Type *</Label>
-                    <Select
-                      value={formData.activityType}
-                      onValueChange={(value) => setFormData(prev => ({ ...prev, activityType: value }))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select activity type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {ACTIVITY_TYPES.map((type) => (
-                          <SelectItem key={type.value} value={type.value}>
-                            <div className="flex items-center gap-2">
-                              <span>{type.icon}</span>
-                              <span>{type.label}</span>
+              )}
+              <Dialog
+                open={dialogOpen}
+                onOpenChange={(open) => {
+                  setDialogOpen(open);
+                  if (open) {
+                    // Auto-get location when dialog opens
+                    getCurrentLocationForActivity();
+                    // Fetch active tickets when dialog opens
+                    fetchActiveTickets();
+                  } else {
+                    // Reset location state when dialog closes
+                    setActivityLocation(null);
+                    setLocationError(null);
+                  }
+                }}
+              >
+                <DialogTrigger asChild>
+                  <Button size="sm" disabled={!!activeActivity}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Log Activity
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[500px]">
+                  <DialogHeader>
+                    <DialogTitle>Log New Activity</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="activityType">Activity Type *</Label>
+                      <Select
+                        value={formData.activityType}
+                        onValueChange={(value) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            activityType: value,
+                            ticketId: "",
+                          }))
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select activity type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {ACTIVITY_TYPES.map((type) => (
+                            <SelectItem key={type.value} value={type.value}>
+                              <div className="flex items-center gap-2">
+                                <span>{type.icon}</span>
+                                <span>{type.label}</span>
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="title">Title *</Label>
+                      <Input
+                        id="title"
+                        value={formData.title}
+                        onChange={(e) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            title: e.target.value,
+                          }))
+                        }
+                        placeholder="Brief description of the activity"
+                      />
+                    </div>
+
+                    {/* Show tickets dropdown only for Ticket Work */}
+                    {formData.activityType === "TICKET_WORK" && (
+                      <div className="space-y-2">
+                        <Label htmlFor="ticketId">Ticket</Label>
+                        <Select
+                          value={formData.ticketId}
+                          onValueChange={(value) =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              ticketId: value,
+                            }))
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select active ticket" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {activeTickets.length === 0 ? (
+                              <SelectItem value="" disabled>
+                                No active tickets
+                              </SelectItem>
+                            ) : (
+                              activeTickets.map((ticket) => (
+                                <SelectItem
+                                  key={ticket.id}
+                                  value={ticket.id.toString()}
+                                >
+                                  <div className="flex flex-col">
+                                    <span>
+                                      #{ticket.id} - {ticket.title}
+                                    </span>
+                                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                      <Badge
+                                        className={`text-xs ${
+                                          ticket.status === "OPEN"
+                                            ? "bg-blue-100 text-blue-800"
+                                            : ticket.status === "IN_PROGRESS"
+                                            ? "bg-yellow-100 text-yellow-800"
+                                            : ticket.status === "ASSIGNED"
+                                            ? "bg-purple-100 text-purple-800"
+                                            : ticket.status === "RESOLVED"
+                                            ? "bg-green-100 text-green-800"
+                                            : "bg-gray-100 text-gray-800"
+                                        }`}
+                                      >
+                                        {ticket.status || "OPEN"}
+                                      </Badge>
+                                      <Badge
+                                        className={`text-xs ${
+                                          ticket.priority === "CRITICAL"
+                                            ? "bg-red-100 text-red-800"
+                                            : ticket.priority === "HIGH"
+                                            ? "bg-orange-100 text-orange-800"
+                                            : ticket.priority === "MEDIUM"
+                                            ? "bg-blue-100 text-blue-800"
+                                            : "bg-gray-100 text-gray-800"
+                                        }`}
+                                      >
+                                        {ticket.priority || "MEDIUM"}
+                                      </Badge>
+                                      {ticket.customer?.companyName && (
+                                        <span>
+                                          {ticket.customer.companyName}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </SelectItem>
+                              ))
+                            )}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+
+                    {/* Location Status Section */}
+                    <div className="space-y-2">
+                      <Label>Activity Location</Label>
+                      <div
+                        className={`p-3 rounded-lg border-2 transition-all duration-300 ${
+                          activityLocation
+                            ? "bg-green-50 border-green-200"
+                            : locationError
+                            ? "bg-red-50 border-red-200"
+                            : "bg-blue-50 border-blue-200"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            {locationLoading ? (
+                              <div className="relative">
+                                <MapPin className="h-5 w-5 text-blue-500" />
+                                <Loader2 className="h-3 w-3 text-blue-600 animate-spin absolute -top-1 -right-1" />
+                              </div>
+                            ) : activityLocation ? (
+                              <div className="relative">
+                                <MapPin className="h-5 w-5 text-green-600" />
+                                <div className="h-3 w-3 text-green-600 absolute -top-1 -right-1 bg-white rounded-full flex items-center justify-center">
+                                  ✓
+                                </div>
+                              </div>
+                            ) : (
+                              <MapPin className="h-5 w-5 text-gray-400" />
+                            )}
+
+                            <div className="flex-1">
+                              <p
+                                className={`text-sm font-medium ${
+                                  activityLocation
+                                    ? "text-green-800"
+                                    : locationError
+                                    ? "text-red-800"
+                                    : "text-gray-600"
+                                }`}
+                              >
+                                {locationLoading
+                                  ? "Getting location..."
+                                  : activityLocation
+                                  ? "Location Ready"
+                                  : locationError
+                                  ? "Location Error"
+                                  : "Location will be captured"}
+                              </p>
+                              <p
+                                className={`text-xs ${
+                                  activityLocation
+                                    ? "text-green-700"
+                                    : locationError
+                                    ? "text-red-700"
+                                    : "text-gray-500"
+                                }`}
+                              >
+                                {locationLoading
+                                  ? "Please allow location access..."
+                                  : activityLocation
+                                  ? `📍 ${activityLocation.address}`
+                                  : locationError
+                                  ? locationError
+                                  : "Current location will be automatically captured"}
+                              </p>
                             </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                          </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="title">Title *</Label>
-                    <Input
-                      id="title"
-                      value={formData.title}
-                      onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
-                      placeholder="Brief description of the activity"
-                    />
-                  </div>
+                          {(!activityLocation || locationError) && (
+                            <Button
+                              onClick={getCurrentLocationForActivity}
+                              disabled={locationLoading}
+                              size="sm"
+                              variant="outline"
+                              className="text-xs"
+                            >
+                              {locationLoading ? (
+                                <>
+                                  <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                                  Getting...
+                                </>
+                              ) : (
+                                <>
+                                  <MapPin className="h-3 w-3 mr-1" />
+                                  Get Location
+                                </>
+                              )}
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="description">Description</Label>
-                    <Textarea
-                      id="description"
-                      value={formData.description}
-                      onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                      placeholder="Additional details about the activity"
-                      rows={3}
-                    />
+                    <div className="flex justify-end gap-2 pt-4">
+                      <Button
+                        variant="outline"
+                        onClick={() => setDialogOpen(false)}
+                        disabled={submitting}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        onClick={handleStartActivity}
+                        disabled={submitting}
+                      >
+                        {submitting ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <Play className="h-4 w-4 mr-2" />
+                        )}
+                        Start Activity
+                      </Button>
+                    </div>
                   </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="ticketId">Ticket ID (if applicable)</Label>
-                    <Input
-                      id="ticketId"
-                      type="number"
-                      value={formData.ticketId}
-                      onChange={(e) => setFormData(prev => ({ ...prev, ticketId: e.target.value }))}
-                      placeholder="Enter ticket ID if this activity is related to a ticket"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="location">Location</Label>
-                    <Input
-                      id="location"
-                      value={formData.location}
-                      onChange={(e) => setFormData(prev => ({ ...prev, location: e.target.value }))}
-                      placeholder="Location will be auto-detected if left empty"
-                    />
-                  </div>
-
-                  <div className="flex justify-end gap-2 pt-4">
-                    <Button
-                      variant="outline"
-                      onClick={() => setDialogOpen(false)}
-                      disabled={submitting}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      onClick={handleStartActivity}
-                      disabled={submitting}
-                    >
-                      {submitting ? (
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      ) : (
-                        <Play className="h-4 w-4 mr-2" />
-                      )}
-                      Start Activity
-                    </Button>
-                  </div>
-                </div>
-              </DialogContent>
-            </Dialog>
+                </DialogContent>
+              </Dialog>
+            </div>
           </div>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Active Activity */}
-        {activeActivity && (
-          <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                <Badge variant="outline" className="bg-green-100 text-green-800">
-                  Active
-                </Badge>
-                <span className="text-sm font-medium">{getActivityTypeInfo(activeActivity.activityType).icon}</span>
-                <span className="text-sm font-medium">{getActivityTypeInfo(activeActivity.activityType).label}</span>
-              </div>
-              <span className="text-sm text-muted-foreground">
-                Started {new Date(activeActivity.startTime).toLocaleTimeString()}
-              </span>
-            </div>
-            <h4 className="font-medium">{activeActivity.title}</h4>
-            {activeActivity.description && (
-              <p className="text-sm text-muted-foreground mt-1">{activeActivity.description}</p>
-            )}
-            {activeActivity.location && (
-              <div className="flex items-center gap-1 mt-2 text-sm text-muted-foreground">
-                <MapPin className="h-3 w-3" />
-                <span className="truncate max-w-[300px]" title={activeActivity.location}>
-                  {activeActivity.location}
-                </span>
-              </div>
-            )}
-            {activeActivity.ticket && (
-              <div className="flex items-center gap-1 mt-2 text-sm text-blue-600">
-                <FileText className="h-3 w-3" />
-                <span>Ticket #{activeActivity.ticket.id}: {activeActivity.ticket.title}</span>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Recent Activities */}
-        <div className="space-y-3">
-          <h4 className="text-sm font-medium text-muted-foreground">Recent Activities</h4>
-          {loading ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin" />
-            </div>
-          ) : activities.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <Activity className="h-8 w-8 mx-auto mb-2 opacity-50" />
-              <p>No activities logged yet</p>
-            </div>
-          ) : (
-            activities.filter(activity => activity.id !== activeActivity?.id).map((activity) => (
-              <div key={activity.id} className="p-3 border rounded-lg hover:bg-gray-50">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm">{getActivityTypeInfo(activity.activityType).icon}</span>
-                    <Badge variant="outline" className="text-xs">
-                      {getActivityTypeInfo(activity.activityType).label}
-                    </Badge>
-                    <Badge variant="secondary" className="text-xs">
-                      {formatDuration(activity.duration)}
-                    </Badge>
-                  </div>
-                  <span className="text-xs text-muted-foreground">
-                    {new Date(activity.startTime).toLocaleDateString()}
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Active Activity */}
+          {activeActivity && (
+            <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                  <Badge
+                    variant="outline"
+                    className="bg-green-100 text-green-800"
+                  >
+                    {formatDuration(undefined, true, activeActivity.startTime)}
+                  </Badge>
+                  <span className="text-sm font-medium">
+                    {getActivityTypeInfo(activeActivity.activityType).icon}
+                  </span>
+                  <span className="text-sm font-medium">
+                    {getActivityTypeInfo(activeActivity.activityType).label}
                   </span>
                 </div>
-                <h5 className="text-sm font-medium">{activity.title}</h5>
-                {activity.description && (
-                  <p className="text-xs text-muted-foreground mt-1">{activity.description}</p>
-                )}
-                <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-                  <div className="flex items-center gap-1">
-                    <Clock className="h-3 w-3" />
-                    <span>{new Date(activity.startTime).toLocaleTimeString()}</span>
-                    {activity.endTime && (
-                      <span> - {new Date(activity.endTime).toLocaleTimeString()}</span>
-                    )}
-                  </div>
-                  {activity.location && (
-                    <div className="flex items-center gap-1">
-                      <MapPin className="h-3 w-3" />
-                      <span className="truncate max-w-[200px]">{activity.location}</span>
-                    </div>
-                  )}
-                </div>
-                {activity.ticket && (
-                  <div className="flex items-center gap-1 mt-2 text-xs text-blue-600">
-                    <FileText className="h-3 w-3" />
-                    <span>#{activity.ticket.id}: {activity.ticket.title}</span>
-                  </div>
-                )}
+                <span className="text-sm text-muted-foreground">
+                  Started{" "}
+                  {new Date(activeActivity.startTime).toLocaleTimeString()}
+                </span>
               </div>
-            ))
+              <h4 className="font-medium">{activeActivity.title}</h4>
+              {activeActivity.description && (
+                <p className="text-sm text-muted-foreground mt-1">
+                  {activeActivity.description}
+                </p>
+              )}
+              {activeActivity.location && (
+                <div className="flex items-center gap-1 mt-2 text-sm text-muted-foreground">
+                  <MapPin className="h-3 w-3" />
+                  <span
+                    className="truncate max-w-[300px]"
+                    title={activeActivity.location}
+                  >
+                    {activeActivity.location}
+                  </span>
+                </div>
+              )}
+              {activeActivity.ticket && (
+                <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-blue-600" />
+                      <span className="font-medium text-blue-900">
+                        Ticket #{activeActivity.ticket.id}
+                      </span>
+                    </div>
+                    <div className="flex gap-1">
+                      <Badge
+                        className={`text-xs ${
+                          activeActivity.ticket.status === "OPEN"
+                            ? "bg-blue-100 text-blue-800"
+                            : activeActivity.ticket.status === "IN_PROGRESS"
+                            ? "bg-yellow-100 text-yellow-800"
+                            : activeActivity.ticket.status === "ASSIGNED"
+                            ? "bg-purple-100 text-purple-800"
+                            : activeActivity.ticket.status === "RESOLVED"
+                            ? "bg-green-100 text-green-800"
+                            : "bg-gray-100 text-gray-800"
+                        }`}
+                      >
+                        {activeActivity.ticket.status || "OPEN"}
+                      </Badge>
+                      <Badge
+                        className={`text-xs ${
+                          activeActivity.ticket.priority === "CRITICAL"
+                            ? "bg-red-100 text-red-800"
+                            : activeActivity.ticket.priority === "HIGH"
+                            ? "bg-orange-100 text-orange-800"
+                            : activeActivity.ticket.priority === "MEDIUM"
+                            ? "bg-blue-100 text-blue-800"
+                            : "bg-gray-100 text-gray-800"
+                        }`}
+                      >
+                        {activeActivity.ticket.priority || "MEDIUM"}
+                      </Badge>
+                    </div>
+                  </div>
+                  <h5 className="text-sm font-medium text-blue-900 mb-1">
+                    {activeActivity.ticket.title}
+                  </h5>
+                  <p className="text-xs text-blue-700">
+                    Customer:{" "}
+                    {activeActivity.ticket.customer?.companyName ||
+                      "Unknown Customer"}
+                  </p>
+                </div>
+              )}
+            </div>
           )}
-        </div>
-      </CardContent>
-    </Card>
+
+          {/* Recent Activities */}
+          <div className="space-y-3">
+            <h4 className="text-sm font-medium text-muted-foreground">
+              Recent Activities ({activities.length} total)
+            </h4>
+            {loading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin" />
+                <p className="text-sm text-muted-foreground mt-2">
+                  Loading activities...
+                </p>
+              </div>
+            ) : !Array.isArray(activities) || activities.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <Activity className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p>No activities logged yet</p>
+              </div>
+            ) : (
+              activities
+                .filter((activity) => activity.id !== activeActivity?.id)
+                .map((activity) => {
+                  const isOngoing = !activity.endTime || activity.endTime === null || activity.endTime === '';
+                  return (
+                    <div
+                      key={activity.id}
+                      className="p-3 border rounded-lg hover:bg-gray-50"
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm">
+                            {getActivityTypeInfo(activity.activityType).icon}
+                          </span>
+                          <Badge variant="outline" className="text-xs">
+                            {getActivityTypeInfo(activity.activityType).label}
+                          </Badge>
+                          {isOngoing ? (
+                            <Badge
+                              variant="outline"
+                              className="text-xs bg-yellow-100 text-yellow-800 border-yellow-300"
+                            >
+                              {formatDuration(undefined, true, activity.startTime)}
+                            </Badge>
+                          ) : (
+                            <Badge variant="secondary" className="text-xs">
+                              {formatDuration(activity.duration, false, activity.startTime, activity.endTime)}
+                            </Badge>
+                          )}
+                        </div>
+                        <span className="text-xs text-muted-foreground">
+                          {new Date(activity.startTime).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <h5 className="text-sm font-medium">{activity.title}</h5>
+                      {activity.description && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {activity.description}
+                        </p>
+                      )}
+                      <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+                        <div className="flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          <span>
+                            {new Date(activity.startTime).toLocaleTimeString()}
+                          </span>
+                          {activity.endTime && (
+                            <span>
+                              {" "}
+                              -{" "}
+                              {new Date(activity.endTime).toLocaleTimeString()}
+                            </span>
+                          )}
+                        </div>
+                        {activity.location && (
+                          <div className="flex items-center gap-1">
+                            <MapPin className="h-3 w-3" />
+                            <span className="truncate max-w-[200px]">
+                              {activity.location}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                      {activity.ticket && (
+                        <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded">
+                          <div className="flex items-start justify-between mb-1">
+                            <div className="flex items-center gap-1">
+                              <FileText className="h-3 w-3 text-blue-600" />
+                              <span className="text-xs font-medium text-blue-900">
+                                Ticket #{activity.ticket.id}
+                              </span>
+                            </div>
+                            <div className="flex gap-1">
+                              <Badge
+                                className={`text-xs ${
+                                  activity.ticket.status === "OPEN"
+                                    ? "bg-blue-100 text-blue-800"
+                                    : activity.ticket.status === "IN_PROGRESS"
+                                    ? "bg-yellow-100 text-yellow-800"
+                                    : activity.ticket.status === "ASSIGNED"
+                                    ? "bg-purple-100 text-purple-800"
+                                    : activity.ticket.status === "RESOLVED"
+                                    ? "bg-green-100 text-green-800"
+                                    : "bg-gray-100 text-gray-800"
+                                }`}
+                              >
+                                {activity.ticket.status || "OPEN"}
+                              </Badge>
+                              <Badge
+                                className={`text-xs ${
+                                  activity.ticket.priority === "CRITICAL"
+                                    ? "bg-red-100 text-red-800"
+                                    : activity.ticket.priority === "HIGH"
+                                    ? "bg-orange-100 text-orange-800"
+                                    : activity.ticket.priority === "MEDIUM"
+                                    ? "bg-blue-100 text-blue-800"
+                                    : "bg-gray-100 text-gray-800"
+                                }`}
+                              >
+                                {activity.ticket.priority || "MEDIUM"}
+                              </Badge>
+                            </div>
+                          </div>
+                          <p className="text-xs text-blue-900 font-medium mb-1">
+                            {activity.ticket.title}
+                          </p>
+                          <p className="text-xs text-blue-700">
+                            {activity.ticket.customer?.companyName ||
+                              "Unknown Customer"}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    ),
+    [
+      loading,
+      submitting,
+      activeActivity,
+      activities,
+      dialogOpen,
+      formData,
+      activityLocation,
+      locationLoading,
+      locationError,
+      activeTickets,
+      fetchActivities,
+      handleEndActivity,
+      handleStartActivity,
+      getCurrentLocationForActivity,
+    ]
   );
+
+  return activityLoggerContent;
 }
+
+const ActivityLogger = React.memo(ActivityLoggerComponent);
+
+export default ActivityLogger;

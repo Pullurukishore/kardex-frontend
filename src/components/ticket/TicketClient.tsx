@@ -30,7 +30,7 @@ function getStatusBadgeVariant(status: TicketStatus) {
       return 'default';
     case TicketStatus.ASSIGNED:
       return 'secondary';
-    case TicketStatus.IN_PROCESS:
+    case TicketStatus.IN_PROGRESS:
       return 'default';
     case TicketStatus.ONSITE_VISIT_PLANNED:
       return 'outline';
@@ -105,7 +105,7 @@ export default function TicketClient({
         total: ticketData.length,
         open: ticketData.filter((t: Ticket) => t.status === TicketStatus.OPEN).length,
         assigned: ticketData.filter((t: Ticket) => 
-          t.status === TicketStatus.ASSIGNED || t.status === TicketStatus.IN_PROCESS
+          t.status === TicketStatus.ASSIGNED || t.status === TicketStatus.IN_PROGRESS
         ).length,
         closed: ticketData.filter((t: Ticket) => t.status === TicketStatus.CLOSED).length,
         critical: ticketData.filter((t: Ticket) => t.priority === Priority.CRITICAL).length,

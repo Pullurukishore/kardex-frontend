@@ -14,16 +14,19 @@ interface CustomerFilters {
 async function makeServerRequest(endpoint: string) {
   const cookieStore = cookies();
   const accessToken = cookieStore.get('accessToken')?.value;
+  const token = cookieStore.get('token')?.value;
   
-  if (!accessToken) {
+  // Check for either accessToken or token (based on authentication inconsistencies)
+  const authToken = accessToken || token;
+  
+  if (!authToken) {
     throw new Error('No access token found');
   }
 
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     headers: {
-      'Authorization': `Bearer ${accessToken}`,
+      'Authorization': `Bearer ${authToken}`,
       'Content-Type': 'application/json',
-      'Cookie': cookieStore.toString(),
     },
     cache: 'no-store', // Ensure fresh data
   });
@@ -74,7 +77,7 @@ export async function getCustomerStats(customers: Customer[]) {
 }
 
 export async function getUniqueIndustries(customers: Customer[]): Promise<string[]> {
-  return Array.from(new Set(customers.map(c => c.industry).filter(Boolean)));
+  return Array.from(new Set(customers.map(c => c.industry).filter((industry): industry is string => Boolean(industry))));
 }
 
 export async function deleteCustomerById(id: number): Promise<void> {

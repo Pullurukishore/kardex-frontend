@@ -29,7 +29,8 @@ import {
   FileVideo,
   FileArchive
 } from 'lucide-react';
-import api from '@/lib/api/axios';
+import { apiClient } from '@/lib/api/api-client';
+import axios from 'axios';
 
 interface TicketReport {
   id: string;
@@ -54,10 +55,29 @@ export function TicketReports({ ticketId }: TicketReportsProps) {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Helper function to get auth token
+  const getAuthToken = () => {
+    return localStorage.getItem('accessToken') || localStorage.getItem('token');
+  };
+
+  // Helper function for authenticated blob downloads
+  const downloadBlob = async (url: string) => {
+    const token = getAuthToken();
+    const response = await axios.get(url, {
+      baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5003/api',
+      headers: {
+        'Authorization': token ? `Bearer ${token}` : '',
+      },
+      responseType: 'blob',
+      withCredentials: true,
+    });
+    return response;
+  };
+
   const fetchReports = async () => {
     try {
-      const response = await api.get(`/tickets/${ticketId}/reports`);
-      setReports(response.data);
+      const response = await apiClient.get(`/tickets/${ticketId}/reports`);
+      setReports(response.data || []);
     } catch (error) {
       console.error('Error fetching reports:', error);
     }
@@ -119,11 +139,11 @@ export function TicketReports({ ticketId }: TicketReportsProps) {
         formData.append('files', file);
       });
 
-      const response = await api.post(`/tickets/${ticketId}/reports`, formData, {
+      const response = await apiClient.post(`/tickets/${ticketId}/reports`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
-        onUploadProgress: (progressEvent) => {
+        onUploadProgress: (progressEvent: any) => {
           const progress = Math.round(
             (progressEvent.loaded * 100) / (progressEvent.total || 1)
           );
@@ -152,9 +172,109 @@ export function TicketReports({ ticketId }: TicketReportsProps) {
     }
   };
 
+  const handleView = async (reportId: string, fileName: string) => {
+    try {
+      console.log('Viewing report:', { reportId, fileName, ticketId });
+      
+      const response = await downloadBlob(`/tickets/${ticketId}/reports/${reportId}/download`);
+      
+      console.log('View response:', response);
+      console.log('Response data type:', typeof response.data);
+      console.log('Response data size:', response.data.size);
+      console.log('Response headers:', response.headers);
+      
+      // Check if we have valid blob data
+      if (!response.data || response.data.size === 0) {
+        toast({
+          title: 'View failed',
+          description: 'Report file is empty or not found',
+          variant: 'destructive',
+        });
+        return;
+      }
+      
+      // Create blob URL for viewing with proper MIME type from headers
+      const contentType = response.headers['content-type'] || 'application/octet-stream';
+      const blob = new Blob([response.data], { type: contentType });
+      const url = window.URL.createObjectURL(blob);
+      
+      console.log('Created blob URL:', url);
+      console.log('Blob size:', blob.size);
+      console.log('Blob type:', blob.type);
+      
+      // Open in new tab for viewing
+      const newWindow = window.open(url, '_blank');
+      if (!newWindow) {
+        toast({
+          title: 'Popup blocked',
+          description: 'Please allow popups to view the report',
+          variant: 'destructive',
+        });
+        window.URL.revokeObjectURL(url);
+        return;
+      }
+      
+      // Clean up the URL after a delay to allow the browser to load it
+      setTimeout(() => {
+        window.URL.revokeObjectURL(url);
+      }, 5000); // Increased timeout to ensure file loads
+    } catch (error) {
+      console.error('Error viewing report:', error);
+      toast({
+        title: 'View failed',
+        description: 'Failed to view report',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleDownload = async (reportId: string, fileName: string) => {
+    try {
+      console.log('Downloading report:', { reportId, fileName, ticketId });
+      
+      const response = await downloadBlob(`/tickets/${ticketId}/reports/${reportId}/download`);
+      
+      console.log('Download response:', response);
+      
+      // Check if we have valid blob data
+      if (!response.data || response.data.size === 0) {
+        toast({
+          title: 'Download failed',
+          description: 'Report file is empty or not found',
+          variant: 'destructive',
+        });
+        return;
+      }
+      
+      // Create download link with proper content type
+      const contentType = response.headers['content-type'] || 'application/octet-stream';
+      const blob = new Blob([response.data], { type: contentType });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', fileName);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+      toast({
+        title: 'Success',
+        description: 'Report downloaded successfully',
+      });
+    } catch (error) {
+      console.error('Error downloading report:', error);
+      toast({
+        title: 'Download failed',
+        description: 'Failed to download report',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const handleDelete = async (reportId: string) => {
     try {
-      await api.delete(`/tickets/${ticketId}/reports/${reportId}`);
+      await apiClient.delete(`/tickets/${ticketId}/reports/${reportId}`);
       toast({
         title: 'Success',
         description: 'Report deleted successfully',
@@ -331,14 +451,24 @@ export function TicketReports({ ticketId }: TicketReportsProps) {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => window.open(report.url, '_blank')}
+                          onClick={() => handleView(report.id, report.fileName)}
+                          title="View report"
                         >
                           <Eye className="h-4 w-4" />
                         </Button>
                         <Button
                           variant="ghost"
                           size="sm"
+                          onClick={() => handleDownload(report.id, report.fileName)}
+                          title="Download report"
+                        >
+                          <Download className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           onClick={() => handleDelete(report.id)}
+                          title="Delete report"
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>

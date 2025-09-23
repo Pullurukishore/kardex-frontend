@@ -17,13 +17,15 @@ import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 
 interface ZoneTechniciansPerformanceProps {
-  technicians?: Array<{
-    id: number;
-    name: string;
-    activeTickets: number;
-    efficiency: number;
-    rating: number;
-  }>;
+  zoneDashboardData: {
+    technicians?: Array<{
+      id: number;
+      name: string;
+      activeTickets: number;
+      efficiency: number;
+      rating: number;
+    }>;
+  };
 }
 
 // Helper function to get performance rating
@@ -100,17 +102,19 @@ const getWorkloadStatus = (activeTickets: number): {
 };
 
 export default function ZoneTechniciansPerformance({ 
-  technicians = [] 
+  zoneDashboardData 
 }: ZoneTechniciansPerformanceProps) {
+  const { technicians = [] } = zoneDashboardData;
+  
   // Calculate team statistics
   const totalTechnicians = technicians.length;
   const avgEfficiency = totalTechnicians > 0 
-    ? technicians.reduce((sum, tech) => sum + tech.efficiency, 0) / totalTechnicians 
+    ? technicians.reduce((sum: number, tech: any) => sum + tech.efficiency, 0) / totalTechnicians 
     : 0;
   const avgRating = totalTechnicians > 0 
-    ? technicians.reduce((sum, tech) => sum + tech.rating, 0) / totalTechnicians 
+    ? technicians.reduce((sum: number, tech: any) => sum + tech.rating, 0) / totalTechnicians 
     : 0;
-  const totalActiveTickets = technicians.reduce((sum, tech) => sum + tech.activeTickets, 0);
+  const totalActiveTickets = technicians.reduce((sum: number, tech: any) => sum + tech.activeTickets, 0);
   
   // Sort technicians by efficiency (highest first)
   const sortedTechnicians = [...technicians].sort((a, b) => b.efficiency - a.efficiency);
@@ -238,25 +242,25 @@ export default function ZoneTechniciansPerformance({
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div className="text-center p-2 rounded-lg bg-green-50">
                 <div className="text-sm font-bold text-green-600">
-                  {technicians.filter(t => t.efficiency >= 80).length}
+                  {technicians.filter((t: any) => t.efficiency >= 80).length}
                 </div>
                 <div className="text-xs text-green-700">High Performers</div>
               </div>
               <div className="text-center p-2 rounded-lg bg-blue-50">
                 <div className="text-sm font-bold text-blue-600">
-                  {technicians.filter(t => t.activeTickets === 0).length}
+                  {technicians.filter((t: any) => t.activeTickets === 0).length}
                 </div>
                 <div className="text-xs text-blue-700">Available</div>
               </div>
               <div className="text-center p-2 rounded-lg bg-yellow-50">
                 <div className="text-sm font-bold text-yellow-600">
-                  {technicians.filter(t => t.activeTickets > 3).length}
+                  {technicians.filter((t: any) => t.activeTickets > 3).length}
                 </div>
                 <div className="text-xs text-yellow-700">Busy</div>
               </div>
               <div className="text-center p-2 rounded-lg bg-purple-50">
                 <div className="text-sm font-bold text-purple-600">
-                  {technicians.filter(t => t.rating >= 4.0).length}
+                  {technicians.filter((t: any) => t.rating >= 4.0).length}
                 </div>
                 <div className="text-xs text-purple-700">Top Rated</div>
               </div>

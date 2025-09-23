@@ -73,7 +73,7 @@ export default function TicketFilters({ searchParams }: TicketFiltersProps) {
             <SelectTrigger>
               <SelectValue placeholder="All Statuses" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="max-h-60 overflow-y-auto">
               <SelectItem value="">All Statuses</SelectItem>
               {Object.values(TicketStatus).map((status) => (
                 <SelectItem key={status} value={status}>

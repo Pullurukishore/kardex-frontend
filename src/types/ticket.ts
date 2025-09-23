@@ -1,11 +1,17 @@
 export enum TicketStatus {
   OPEN = 'OPEN',
   ASSIGNED = 'ASSIGNED',
-  IN_PROCESS = 'IN_PROCESS',
   WAITING_CUSTOMER = 'WAITING_CUSTOMER',
   ONSITE_VISIT = 'ONSITE_VISIT',
   ONSITE_VISIT_PLANNED = 'ONSITE_VISIT_PLANNED',
+  ONSITE_VISIT_STARTED = 'ONSITE_VISIT_STARTED',
+  ONSITE_VISIT_REACHED = 'ONSITE_VISIT_REACHED',
+  ONSITE_VISIT_IN_PROGRESS = 'ONSITE_VISIT_IN_PROGRESS',
+  ONSITE_VISIT_RESOLVED = 'ONSITE_VISIT_RESOLVED',
+  ONSITE_VISIT_PENDING = 'ONSITE_VISIT_PENDING',
+  ONSITE_VISIT_COMPLETED = 'ONSITE_VISIT_COMPLETED',
   PO_NEEDED = 'PO_NEEDED',
+  PO_REACHED = 'PO_REACHED',
   PO_RECEIVED = 'PO_RECEIVED',
   SPARE_PARTS_NEEDED = 'SPARE_PARTS_NEEDED',
   SPARE_PARTS_BOOKED = 'SPARE_PARTS_BOOKED',
@@ -17,7 +23,8 @@ export enum TicketStatus {
   IN_PROGRESS = 'IN_PROGRESS',
   ON_HOLD = 'ON_HOLD',
   ESCALATED = 'ESCALATED',
-  RESOLVED = 'RESOLVED'
+  RESOLVED = 'RESOLVED',
+  PENDING = 'PENDING'
 }
 
 export enum Priority {
@@ -160,6 +167,18 @@ export interface AddCommentData {
   isInternal?: boolean;
 }
 
+export interface LocationData {
+  latitude: number;
+  longitude: number;
+  address?: string;
+  timestamp?: string;
+  accuracy?: number;
+  altitude?: number | null;
+  altitudeAccuracy?: number | null;
+  heading?: number | null;
+  speed?: number | null;
+}
+
 export interface TicketStatusHistory {
   id: number;
   ticketId: number;
@@ -168,6 +187,7 @@ export interface TicketStatusHistory {
   changedAt: string;
   notes?: string;
   changedBy: User;
+  location?: LocationData;
 }
 
 export interface PORequest {

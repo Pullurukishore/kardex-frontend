@@ -133,7 +133,7 @@ const FLAG_CONFIG = {
   LOW_ACTIVITY: { label: 'Low Activity', color: 'bg-gray-100 text-gray-800', icon: Activity },
 };
 
-export default function AdminAttendancePage() {
+export default function ServicePersonActivityPage() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
@@ -145,10 +145,8 @@ export default function AdminAttendancePage() {
   const [totalPages, setTotalPages] = useState(1);
   const [dateRange, setDateRange] = useState<'today' | 'yesterday' | 'this_week' | 'last_week' | 'this_month' | 'custom' | 'specific'>('today');
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
-  const [selectedUser, setSelectedUser] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [selectedActivityType, setSelectedActivityType] = useState<string>('all');
-  const [selectedZone, setSelectedZone] = useState<string>('all');
   const [isExporting, setIsExporting] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState<AttendanceRecord | null>(null);
@@ -196,33 +194,26 @@ export default function AdminAttendancePage() {
       const { startDate, endDate } = getDateRange();
       const params: any = {
         startDate,
-        endDate,
-        page: currentPage,
-        limit: 20
+        endDate
       };
 
-      if (selectedUser !== 'all') params.userId = selectedUser;
+      // Only include relevant filters for service person view
       if (selectedStatus !== 'all') params.status = selectedStatus;
       if (selectedActivityType !== 'all') params.activityType = selectedActivityType;
-      if (selectedZone !== 'all') params.zoneId = selectedZone;
       if (searchQuery.trim()) params.search = searchQuery.trim();
 
       console.log('🔍 Making API calls with params:', params);
       console.log('📅 Date range:', { startDate, endDate });
 
-      // Fetch attendance records, stats, service persons, and zones in parallel
-      const [attendanceResponse, statsResponse, servicePersonsResponse, serviceZonesResponse] = await Promise.allSettled([
-        apiClient.get('/admin/attendance', { params }),
-        apiClient.get('/admin/attendance/stats', { params: { startDate, endDate } }),
-        apiClient.get('/admin/attendance/service-persons'),
-        apiClient.get('/admin/attendance/service-zones')
+      // Fetch attendance records and stats for current service person
+      const [attendanceResponse, statsResponse] = await Promise.allSettled([
+        apiClient.get('/service-person/attendance', { params }),
+        apiClient.get('/service-person/attendance/stats', { params: { startDate, endDate } })
       ]);
 
       console.log('📡 API responses received:', {
         attendance: attendanceResponse.status,
-        stats: statsResponse.status,
-        servicePersons: servicePersonsResponse.status,
-        serviceZones: serviceZonesResponse.status
+        stats: statsResponse.status
       });
 
       // Process attendance records
@@ -270,39 +261,9 @@ export default function AdminAttendancePage() {
         setStats(null);
       }
 
-      // Process service persons
-      if (servicePersonsResponse.status === 'fulfilled') {
-        const response = servicePersonsResponse.value as any;
-        console.log('Raw service persons response:', response);
-        
-        if (response.success && response.data) {
-          console.log('Processed service persons data:', response.data);
-          setServicePersons(Array.isArray(response.data) ? response.data : []);
-        } else {
-          console.error('❌ Invalid service persons response format:', response);
-          setServicePersons([]);
-        }
-      } else {
-        console.error('Error fetching service persons:', servicePersonsResponse.reason);
-        setServicePersons([]);
-      }
-
-      // Process service zones
-      if (serviceZonesResponse.status === 'fulfilled') {
-        const response = serviceZonesResponse.value as any;
-        console.log('Raw service zones response:', response);
-        
-        if (response.success && response.data) {
-          console.log('Processed service zones data:', response.data);
-          setServiceZones(Array.isArray(response.data) ? response.data : []);
-        } else {
-          console.error('❌ Invalid service zones response format:', response);
-          setServiceZones([]);
-        }
-      } else {
-        console.error('Error fetching service zones:', serviceZonesResponse.reason);
-        setServiceZones([]);
-      }
+      // Service persons and zones not needed for service person view
+      setServicePersons([]);
+      setServiceZones([]);
 
     } catch (error) {
       console.error('Error fetching attendance data:', error);
@@ -339,15 +300,11 @@ export default function AdminAttendancePage() {
 
   useEffect(() => {
     fetchAttendanceData();
-  }, [dateRange, selectedDate, selectedUser, selectedStatus, selectedActivityType, selectedZone, currentPage]);
+  }, [dateRange, selectedDate, selectedStatus, selectedActivityType]);
 
   useEffect(() => {
     const delayedSearch = setTimeout(() => {
-      if (currentPage === 1) {
-        fetchAttendanceData();
-      } else {
-        setCurrentPage(1);
-      }
+      fetchAttendanceData();
     }, 500);
 
     return () => clearTimeout(delayedSearch);
@@ -384,8 +341,8 @@ export default function AdminAttendancePage() {
                     <Users className="h-8 w-8 text-white" />
                   </div>
                   <div>
-                    <h1 className="text-4xl font-bold text-white mb-1">Attendance Management</h1>
-                    <p className="text-blue-100 text-lg">Monitor and manage service person attendance records</p>
+                    <h1 className="text-4xl font-bold text-white mb-1">My Daily Activities</h1>
+                    <p className="text-blue-100 text-lg">Track your daily attendance and activity records</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-4 mt-4">
@@ -457,16 +414,16 @@ export default function AdminAttendancePage() {
             {/* Checked In Card */}
             <Card className="relative overflow-hidden border-0 shadow-xl bg-gradient-to-br from-green-500 to-emerald-600 text-white transform transition-all duration-300 hover:scale-105 hover:shadow-2xl">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-green-100">Active Users</CardTitle>
+                <CardTitle className="text-sm font-medium text-green-100">My Status</CardTitle>
                 <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
                   <UserCheck className="h-5 w-5 text-white" />
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold mb-1">{stats.statusBreakdown.CHECKED_IN || 0}</div>
+                <div className="text-3xl font-bold mb-1">{stats.statusBreakdown.CHECKED_IN ? 'Active' : 'Inactive'}</div>
                 <p className="text-xs text-green-100 flex items-center gap-1">
                   <Activity className="h-3 w-3" />
-                  Currently active
+                  Current status
                 </p>
               </CardContent>
               <div className="absolute top-0 right-0 w-20 h-20 bg-white/10 rounded-full -mr-10 -mt-10"></div>
@@ -484,7 +441,7 @@ export default function AdminAttendancePage() {
                 <div className="text-3xl font-bold mb-1">{stats.averageHours.toFixed(1)}h</div>
                 <p className="text-xs text-purple-100 flex items-center gap-1">
                   <BarChart3 className="h-3 w-3" />
-                  Per person today
+                  My average today
                 </p>
               </CardContent>
               <div className="absolute top-0 right-0 w-20 h-20 bg-white/10 rounded-full -mr-10 -mt-10"></div>
@@ -493,7 +450,7 @@ export default function AdminAttendancePage() {
             {/* Issues Card */}
             <Card className="relative overflow-hidden border-0 shadow-xl bg-gradient-to-br from-orange-500 to-red-500 text-white transform transition-all duration-300 hover:scale-105 hover:shadow-2xl">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-orange-100">Issues</CardTitle>
+                <CardTitle className="text-sm font-medium text-orange-100">Flags</CardTitle>
                 <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
                   <AlertTriangle className="h-5 w-5 text-white" />
                 </div>
@@ -504,7 +461,7 @@ export default function AdminAttendancePage() {
                 </div>
                 <p className="text-xs text-orange-100 flex items-center gap-1">
                   <ExternalLink className="h-3 w-3" />
-                  Require attention
+                  Need attention
                 </p>
               </CardContent>
               <div className="absolute top-0 right-0 w-20 h-20 bg-white/10 rounded-full -mr-10 -mt-10"></div>
@@ -523,7 +480,7 @@ export default function AdminAttendancePage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               <div className="space-y-3">
                 <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
                   <Calendar className="h-4 w-4 text-blue-500" />
@@ -551,25 +508,6 @@ export default function AdminAttendancePage() {
                 )}
               </div>
               
-              <div className="space-y-3">
-                <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                  <User className="h-4 w-4 text-green-500" />
-                  Service Person
-                </label>
-                <Select value={selectedUser} onValueChange={setSelectedUser}>
-                  <SelectTrigger className="border-slate-200 focus:border-green-500 focus:ring-green-500/20 transition-all duration-200">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-80 overflow-auto">
-                    <SelectItem value="all">👥 All Service Persons</SelectItem>
-                    {servicePersons.map((person) => (
-                      <SelectItem key={person.id} value={person.id.toString()}>
-                        👤 {person.name || person.email}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
               
               <div className="space-y-3">
                 <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
@@ -612,25 +550,6 @@ export default function AdminAttendancePage() {
                 </Select>
               </div>
               
-              <div className="space-y-3">
-                <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                  <MapPin className="h-4 w-4 text-red-500" />
-                  Zone / Region
-                </label>
-                <Select value={selectedZone} onValueChange={setSelectedZone}>
-                  <SelectTrigger className="border-slate-200 focus:border-red-500 focus:ring-red-500/20 transition-all duration-200">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">🌍 All Zones</SelectItem>
-                    {serviceZones.map((zone) => (
-                      <SelectItem key={zone.id} value={zone.id.toString()}>
-                        📍 {zone.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
               
               <div className="space-y-3">
                 <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
@@ -660,10 +579,10 @@ export default function AdminAttendancePage() {
                   <div className="p-2 bg-indigo-100 rounded-lg">
                     <Users className="h-6 w-6 text-indigo-600" />
                   </div>
-                  <span className="text-2xl font-bold">Attendance Records</span>
+                  <span className="text-2xl font-bold">My Activity Records</span>
                 </CardTitle>
                 <CardDescription className="text-slate-600 ml-11">
-                  Comprehensive attendance tracking with smart analytics and real-time insights
+                  Your personal attendance tracking with detailed activity insights
                 </CardDescription>
               </div>
               <div className="flex items-center gap-3">
@@ -683,8 +602,8 @@ export default function AdminAttendancePage() {
                 <div className="p-4 bg-white/60 rounded-full w-24 h-24 mx-auto mb-6 flex items-center justify-center">
                   <Users className="h-12 w-12 text-slate-400" />
                 </div>
-                <h3 className="text-xl font-semibold text-slate-700 mb-2">No Records Found</h3>
-                <p className="text-slate-500 max-w-md mx-auto">No attendance records match your current filters. Try adjusting your search criteria or date range.</p>
+                <h3 className="text-xl font-semibold text-slate-700 mb-2">No Activity Records Found</h3>
+                <p className="text-slate-500 max-w-md mx-auto">No activity records found for the selected date range. Try selecting a different date or check if you were checked in.</p>
               </div>
             ) : (
               <div className="overflow-hidden">
@@ -988,7 +907,7 @@ export default function AdminAttendancePage() {
                             {/* Actions */}
                             <td className="p-4">
                               <div className="flex items-center gap-2">
-                                <Link href={`/admin/attendance/${record.id}/view`}>
+                                <Link href={`/service-person/activity/${record.id}/view`}>
                                   <Button 
                                     variant="ghost" 
                                     size="sm" 
@@ -1021,37 +940,7 @@ export default function AdminAttendancePage() {
               </div>
             )}
               
-              {/* Modern Pagination */}
-              <div className="p-6">
-                {totalPages > 1 && (
-                  <div className="flex items-center justify-center space-x-4 mt-8 p-6 bg-gradient-to-r from-slate-50 to-blue-50 rounded-b-xl">
-                    <Button
-                      variant="outline"
-                      size="lg"
-                      onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                      disabled={currentPage === 1}
-                      className="bg-white hover:bg-blue-50 border-slate-200 text-slate-700 font-medium px-6 transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:hover:scale-100"
-                    >
-                      ← Previous
-                    </Button>
-                    <div className="flex items-center gap-3 bg-white px-4 py-2 rounded-lg shadow-sm border border-slate-200">
-                      <span className="text-sm font-medium text-slate-600">Page</span>
-                      <span className="text-lg font-bold text-blue-600">{currentPage}</span>
-                      <span className="text-sm text-slate-400">of</span>
-                      <span className="text-lg font-bold text-slate-700">{totalPages}</span>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="lg"
-                      onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-                      disabled={currentPage === totalPages}
-                      className="bg-white hover:bg-blue-50 border-slate-200 text-slate-700 font-medium px-6 transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:hover:scale-100"
-                    >
-                      Next →
-                    </Button>
-                  </div>
-                )}
-              </div>
+              {/* No pagination needed for single aggregated record */}
           </CardContent>
         </Card>
 

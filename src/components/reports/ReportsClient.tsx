@@ -80,9 +80,25 @@ export default function ReportsClient({
         const data = reportsResponse.data?.data || {};
         const summaryData = summaryResponse.data?.data || {};
 
+        // Map backend response structure to expected frontend structure
+        const mappedReports = (data.servicePersonReports || []).map((person: any) => ({
+          ...person,
+          zones: person.serviceZones?.map((sz: any) => sz.name) || [], // Map serviceZones to zones array
+        }));
+
         setReportData({
-          ...data,
-          summary: summaryData
+          reports: mappedReports,
+          total: data.total || 0,
+          page: data.page || 1,
+          limit: data.limit || 50,
+          summary: summaryData,
+          dateRange: {
+            from: activeFilters.dateRange?.from?.toISOString().split('T')[0] || '',
+            to: activeFilters.dateRange?.to?.toISOString().split('T')[0] || '',
+            totalDays: activeFilters.dateRange?.from && activeFilters.dateRange?.to 
+              ? Math.ceil((activeFilters.dateRange.to.getTime() - activeFilters.dateRange.from.getTime()) / (1000 * 60 * 60 * 24)) + 1
+              : 0
+          }
         });
       } else {
         // Call regular reports API

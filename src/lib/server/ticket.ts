@@ -25,16 +25,19 @@ type TicketFilters = {
 async function makeServerRequest(endpoint: string) {
   const cookieStore = cookies();
   const accessToken = cookieStore.get('accessToken')?.value;
+  const token = cookieStore.get('token')?.value;
   
-  if (!accessToken) {
+  // Check for either accessToken or token (based on authentication inconsistencies)
+  const authToken = accessToken || token;
+  
+  if (!authToken) {
     throw new Error('No access token found');
   }
 
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     headers: {
-      'Authorization': `Bearer ${accessToken}`,
+      'Authorization': `Bearer ${authToken}`,
       'Content-Type': 'application/json',
-      'Cookie': cookieStore.toString(),
     },
     cache: 'no-store', // Ensure fresh data
   });
@@ -81,8 +84,12 @@ export async function getTicketById(id: string): Promise<Ticket> {
 export async function updateTicketStatus(ticketId: number, status: TicketStatus): Promise<void> {
   const cookieStore = cookies();
   const accessToken = cookieStore.get('accessToken')?.value;
+  const token = cookieStore.get('token')?.value;
   
-  if (!accessToken) {
+  // Check for either accessToken or token (based on authentication inconsistencies)
+  const authToken = accessToken || token;
+  
+  if (!authToken) {
     throw new Error('No access token found');
   }
 
@@ -90,9 +97,8 @@ export async function updateTicketStatus(ticketId: number, status: TicketStatus)
     const response = await fetch(`${API_BASE_URL}/tickets/${ticketId}/status`, {
       method: 'PATCH',
       headers: {
-        'Authorization': `Bearer ${accessToken}`,
+        'Authorization': `Bearer ${authToken}`,
         'Content-Type': 'application/json',
-        'Cookie': cookieStore.toString(),
       },
       body: JSON.stringify({ status }),
     });
@@ -112,7 +118,7 @@ export function calculateTicketStats(tickets: Ticket[]) {
     total: tickets.length,
     open: tickets.filter(t => t.status === TicketStatus.OPEN).length,
     assigned: tickets.filter(t => 
-      t.status === TicketStatus.ASSIGNED || t.status === TicketStatus.IN_PROCESS
+      t.status === TicketStatus.ASSIGNED || t.status === TicketStatus.IN_PROGRESS
     ).length,
     closed: tickets.filter(t => t.status === TicketStatus.CLOSED).length,
     critical: tickets.filter(t => t.priority === Priority.CRITICAL).length,

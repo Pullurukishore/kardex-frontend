@@ -136,7 +136,7 @@ export default function TicketWorkflowActions({
           actions.push(
             <Button 
               key="start" 
-              onClick={() => handleStatusUpdate(TicketStatus.IN_PROCESS)}
+              onClick={() => handleStatusUpdate(TicketStatus.IN_PROGRESS)}
               disabled={loading}
             >
               <Clock className="mr-2 h-4 w-4" />
@@ -155,7 +155,7 @@ export default function TicketWorkflowActions({
         }
         break;
 
-      case TicketStatus.IN_PROCESS:
+      case TicketStatus.IN_PROGRESS:
         if (canPlanVisit) {
           actions.push(
             <PlanVisitDialog 

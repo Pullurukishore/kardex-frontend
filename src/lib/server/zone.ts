@@ -30,17 +30,20 @@ interface PaginatedResponse<T> {
 async function serverFetch(endpoint: string) {
   const cookieStore = cookies();
   const accessToken = cookieStore.get('accessToken')?.value;
+  const token = cookieStore.get('token')?.value;
   const userRole = cookieStore.get('userRole')?.value;
+  
+  // Check for either accessToken or token (based on authentication inconsistencies)
+  const authToken = accessToken || token;
   
   console.log('Zone serverFetch called for endpoint:', endpoint);
   console.log('Full URL:', `${API_BASE_URL}${endpoint}`);
-  console.log('AccessToken found:', !!accessToken);
+  console.log('AuthToken found:', !!authToken);
   console.log('UserRole found:', userRole);
   
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     headers: {
-      'Cookie': cookieStore.toString(),
-      'Authorization': accessToken ? `Bearer ${accessToken}` : '',
+      'Authorization': authToken ? `Bearer ${authToken}` : '',
       'Content-Type': 'application/json',
     },
     cache: 'no-store', // Ensure fresh data

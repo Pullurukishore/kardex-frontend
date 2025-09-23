@@ -49,7 +49,6 @@ type NavItem = {
 const navigation: NavItem[] = [
   // Admin
   { title: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard, roles: [UserRole.ADMIN] },
-  { title: "Field Service Analytics", href: "/admin/FSA", icon: BarChart2, roles: [UserRole.ADMIN] },
   { title: "Daily Activity", href: "/admin/attendance", icon: Calendar, roles: [UserRole.ADMIN] },
   { title: "Customers", href: "/admin/customers", icon: Users, roles: [UserRole.ADMIN] },
   { title: "Service Persons", href: "/admin/service-person", icon: Users, roles: [UserRole.ADMIN] },
@@ -60,12 +59,12 @@ const navigation: NavItem[] = [
 
   // Service Person
   { title: "Dashboard", href: "/service-person/dashboard", icon: LayoutDashboard, roles: [UserRole.SERVICE_PERSON] },
+  { title: "My Activity", href: "/service-person/activity", icon: Calendar, roles: [UserRole.SERVICE_PERSON] },
   { title: "My Tickets", href: "/service-person/tickets", icon: Ticket, roles: [UserRole.SERVICE_PERSON] },
   { title: "Performance Reports", href: "/service-person/reports", icon: BarChart2, roles: [UserRole.SERVICE_PERSON] },
 
   // Zone User
   { title: "Dashboard", href: "/zone/dashboard", icon: LayoutDashboard, roles: [UserRole.ZONE_USER] },
-  { title: "Field Analytics", href: "/zone/FSA", icon: BarChart2, roles: [UserRole.ZONE_USER] },
   { title: "Daily Activity", href: "/zone/attendence", icon: Calendar, roles: [UserRole.ZONE_USER] },
   { title: "Service Persons", href: "/zone/service-persons", icon: MapPin, roles: [UserRole.ZONE_USER] },
   { title: "Customers", href: "/zone/customers", icon: Users, roles: [UserRole.ZONE_USER] },

@@ -34,6 +34,7 @@ export interface DashboardData {
       totalTickets: number;
       servicePersonCount: number;
       customerCount: number;
+      avgResolutionTimeHours: number;
     }>;
   };
   recentTickets: Array<{

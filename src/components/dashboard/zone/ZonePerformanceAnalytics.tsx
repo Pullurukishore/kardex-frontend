@@ -15,18 +15,20 @@ import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 
 interface ZonePerformanceAnalyticsProps {
-  trends: {
-    resolvedTickets: Array<{
-      date: string;
-      count: number;
-    }>;
-  };
-  metrics: {
-    openTickets: number;
-    inProgressTickets: number;
-    resolvedTickets: number;
-    technicianEfficiency: number;
-    customerSatisfactionScore: number;
+  zoneDashboardData: {
+    trends: {
+      resolvedTickets: Array<{
+        date: string;
+        count: number;
+      }>;
+    };
+    metrics: {
+      openTickets: number;
+      inProgressTickets: number;
+      resolvedTickets: number;
+      technicianEfficiency: number;
+      customerSatisfactionScore: number;
+    };
   };
 }
 
@@ -65,9 +67,15 @@ const getPerformanceRating = (score: number): { rating: string; color: string; i
 };
 
 export default function ZonePerformanceAnalytics({ 
-  trends, 
-  metrics 
+  zoneDashboardData 
 }: ZonePerformanceAnalyticsProps) {
+  const { trends, metrics } = zoneDashboardData;
+  
+  // Calculate weekly average for resolved tickets
+  const weeklyAverage = trends.resolvedTickets.length > 0 
+    ? trends.resolvedTickets.reduce((sum: number, day: any) => sum + day.count, 0) / trends.resolvedTickets.length
+    : 0;
+
   const totalTickets = metrics.openTickets + metrics.inProgressTickets + metrics.resolvedTickets;
   const resolutionRate = totalTickets > 0 ? (metrics.resolvedTickets / totalTickets) * 100 : 0;
   
@@ -200,8 +208,8 @@ export default function ZonePerformanceAnalytics({
             </div>
             
             <div className="space-y-1">
-              {recentTrend.map((day, index) => {
-                const maxCount = Math.max(...recentTrend.map(d => d.count));
+              {recentTrend.map((day: any, index: number) => {
+                const maxCount = Math.max(...recentTrend.map((d: any) => d.count));
                 const percentage = maxCount > 0 ? (day.count / maxCount) * 100 : 0;
                 
                 return (

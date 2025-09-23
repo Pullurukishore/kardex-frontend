@@ -53,18 +53,21 @@ interface PaginatedResponse<T> {
 async function serverFetch(endpoint: string) {
   const cookieStore = cookies();
   const accessToken = cookieStore.get('accessToken')?.value;
+  const token = cookieStore.get('token')?.value;
   const userRole = cookieStore.get('userRole')?.value;
+  
+  // Check for either accessToken or token (based on authentication inconsistencies)
+  const authToken = accessToken || token;
   
   console.log('serverFetch called for endpoint:', endpoint);
   console.log('Full URL:', `${API_BASE_URL}${endpoint}`);
   console.log('Available cookies:', cookieStore.getAll());
-  console.log('AccessToken found:', !!accessToken);
+  console.log('AuthToken found:', !!authToken);
   console.log('UserRole found:', userRole);
   
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     headers: {
-      'Cookie': cookieStore.toString(),
-      'Authorization': accessToken ? `Bearer ${accessToken}` : '',
+      'Authorization': authToken ? `Bearer ${authToken}` : '',
       'Content-Type': 'application/json',
     },
     cache: 'no-store', // Ensure fresh data
@@ -202,7 +205,7 @@ export async function getZoneUsers(params: {
       ...(search && { search }),
     });
 
-    const response = await serverFetch(`/admin/zone-users?${searchParams}`);
+    const response = await serverFetch(`/zone-users?${searchParams}`);
     
     // Handle the response structure from our new admin endpoint
     const responseData = response.data || response;
@@ -241,17 +244,20 @@ export async function getZoneUserStats(zoneUsers: ZoneUser[]) {
 export async function deleteServicePerson(id: number): Promise<void> {
   const cookieStore = cookies();
   const accessToken = cookieStore.get('accessToken')?.value;
+  const token = cookieStore.get('token')?.value;
   
-  if (!accessToken) {
+  // Check for either accessToken or token (based on authentication inconsistencies)
+  const authToken = accessToken || token;
+  
+  if (!authToken) {
     throw new Error('No access token found');
   }
 
   const response = await fetch(`${API_BASE_URL}/api/service-persons/${id}`, {
     method: 'DELETE',
     headers: {
-      'Authorization': `Bearer ${accessToken}`,
+      'Authorization': `Bearer ${authToken}`,
       'Content-Type': 'application/json',
-      'Cookie': cookieStore.toString(),
     },
   });
 
@@ -264,17 +270,20 @@ export async function deleteServicePerson(id: number): Promise<void> {
 export async function deleteServiceZone(id: number): Promise<void> {
   const cookieStore = cookies();
   const accessToken = cookieStore.get('accessToken')?.value;
+  const token = cookieStore.get('token')?.value;
   
-  if (!accessToken) {
+  // Check for either accessToken or token (based on authentication inconsistencies)
+  const authToken = accessToken || token;
+  
+  if (!authToken) {
     throw new Error('No access token found');
   }
 
   const response = await fetch(`${API_BASE_URL}/api/service-zones/${id}`, {
     method: 'DELETE',
     headers: {
-      'Authorization': `Bearer ${accessToken}`,
+      'Authorization': `Bearer ${authToken}`,
       'Content-Type': 'application/json',
-      'Cookie': cookieStore.toString(),
     },
   });
 
@@ -287,17 +296,20 @@ export async function deleteServiceZone(id: number): Promise<void> {
 export async function deleteZoneUser(id: number): Promise<void> {
   const cookieStore = cookies();
   const accessToken = cookieStore.get('accessToken')?.value;
+  const token = cookieStore.get('token')?.value;
   
-  if (!accessToken) {
+  // Check for either accessToken or token (based on authentication inconsistencies)
+  const authToken = accessToken || token;
+  
+  if (!authToken) {
     throw new Error('No access token found');
   }
 
   const response = await fetch(`${API_BASE_URL}/api/zone-users/${id}`, {
     method: 'DELETE',
     headers: {
-      'Authorization': `Bearer ${accessToken}`,
+      'Authorization': `Bearer ${authToken}`,
       'Content-Type': 'application/json',
-      'Cookie': cookieStore.toString(),
     },
   });
 

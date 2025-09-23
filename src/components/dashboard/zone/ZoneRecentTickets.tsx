@@ -15,20 +15,22 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 
 interface ZoneRecentTicketsProps {
-  recentActivities?: Array<{
-    id: number;
-    type: string;
-    description: string;
-    timestamp: string;
-    priority: string;
-    technician?: string;
-  }>;
-  topIssues?: Array<{
-    title: string;
-    count: number;
-    priority?: string;
-    avgResolutionTime?: number;
-  }>;
+  zoneDashboardData: {
+    recentActivities?: Array<{
+      id: number;
+      type: string;
+      description: string;
+      timestamp: string;
+      priority: string;
+      technician?: string;
+    }>;
+    topIssues?: Array<{
+      title: string;
+      count: number;
+      priority?: string;
+      avgResolutionTime?: number;
+    }>;
+  };
 }
 
 // Helper function to format timestamp
@@ -80,9 +82,9 @@ const getActivityIcon = (type: string) => {
 };
 
 export default function ZoneRecentTickets({ 
-  recentActivities = [], 
-  topIssues = [] 
+  zoneDashboardData 
 }: ZoneRecentTicketsProps) {
+  const { recentActivities = [], topIssues = [] } = zoneDashboardData;
   return (
     <div className="grid gap-6 lg:grid-cols-2">
       {/* Recent Activities */}
@@ -101,7 +103,7 @@ export default function ZoneRecentTickets({
                 <p>No recent activities</p>
               </div>
             ) : (
-              recentActivities.slice(0, 8).map((activity) => (
+              recentActivities.slice(0, 8).map((activity: any) => (
                 <div
                   key={activity.id}
                   className="flex items-start gap-3 p-3 rounded-lg border bg-gray-50 hover:bg-gray-100 transition-colors"
@@ -160,7 +162,7 @@ export default function ZoneRecentTickets({
                 <p>No major issues reported</p>
               </div>
             ) : (
-              topIssues.slice(0, 8).map((issue, index) => (
+              topIssues.slice(0, 8).map((issue: any, index: number) => (
                 <div
                   key={index}
                   className="flex items-center justify-between p-3 rounded-lg border bg-gray-50 hover:bg-gray-100 transition-colors"

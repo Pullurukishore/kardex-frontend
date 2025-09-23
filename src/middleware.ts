@@ -19,8 +19,12 @@ function getRoleBasedRedirect(role?: UserRole): string {
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const accessToken = request.cookies.get('accessToken')?.value;
+  const token = request.cookies.get('token')?.value;
   const refreshToken = request.cookies.get('refreshToken')?.value;
   const userRole = request.cookies.get('userRole')?.value as UserRole | undefined;
+  
+  // Use fallback token logic like other parts of the app
+  const authToken = accessToken || token;
 
   // Log all API calls with detailed information
   if (pathname.startsWith('/api/')) {
@@ -40,7 +44,7 @@ export async function middleware(request: NextRequest) {
     }
 
     // Block access to API routes if not authenticated
-    if (!accessToken || !refreshToken) {
+    if (!authToken || !refreshToken) {
       console.log('Unauthenticated API access attempt');
       return NextResponse.json(
         { error: 'Authentication required' },
@@ -76,7 +80,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // Require authentication for protected routes
-  if (!accessToken || !refreshToken) {
+  if (!authToken || !refreshToken) {
     const loginUrl = new URL('/auth/login', request.url);
     loginUrl.searchParams.set('callbackUrl', pathname);
     return NextResponse.redirect(loginUrl);

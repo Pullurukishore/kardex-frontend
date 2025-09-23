@@ -153,34 +153,41 @@ function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
         
+        // Quick check for basic auth tokens first
+        const token = getCookie('accessToken') || getCookie('token');
         const role = getCookie('userRole') as UserRole | undefined;
-        console.log('CheckAuth - Role from cookie:', role);
         
-        if (!role) {
-          console.log('CheckAuth - No role found, checking if we have a token...');
-          const token = getCookie('accessToken') || getCookie('token');
-          
-          if (token) {
-            console.log('CheckAuth - Token found but no role, trying to load user...');
-            try {
-              const userData = await loadUser(pathname);
-              if (userData) {
-                console.log('CheckAuth - User loaded successfully from token');
-                return;
-              }
-            } catch (err) {
-              console.error('CheckAuth - Failed to load user from token:', err);
-            }
-          }
-          
-          console.log('CheckAuth - No valid authentication found');
+        console.log('CheckAuth - Token:', !!token, 'Role:', role);
+        
+        // If no token at all, immediately clear state and finish loading
+        if (!token) {
+          console.log('CheckAuth - No token found, clearing auth state');
           setUser(null);
           setAccessToken(null);
+          setIsLoading(false);
           return;
         }
+        
+        // If we have a token but no role, try to load user data
+        if (!role) {
+          console.log('CheckAuth - Token found but no role, trying to load user...');
+          try {
+            const userData = await loadUser(pathname);
+            if (userData) {
+              console.log('CheckAuth - User loaded successfully from token');
+              return;
+            }
+          } catch (err) {
+            console.error('CheckAuth - Failed to load user from token:', err);
+            // Clear invalid auth state
+            await clearAuthState();
+            setIsLoading(false);
+            return;
+          }
+        }
 
-        // Only proceed if we have a valid role
-        if (Object.values(UserRole).includes(role)) {
+        // If we have both token and role, validate them
+        if (role && Object.values(UserRole).includes(role)) {
           try {
             const userData = await loadUser(pathname);
             console.log('CheckAuth - User data loaded:', userData);
@@ -191,11 +198,13 @@ function AuthProvider({ children }: { children: ReactNode }) {
             }
           } catch (err) {
             console.error('CheckAuth - Failed to load user:', err);
+            // Clear invalid auth state
+            await clearAuthState();
           }
         }
         
-        // If we get here, either we couldn't load user data or role was invalid
-        console.log('CheckAuth - Clearing auth state due to failed validation');
+        // If we get here, auth validation failed
+        console.log('CheckAuth - Auth validation failed, clearing state');
         await clearAuthState();
       } catch (error) {
         console.error('Auth check error:', error);
@@ -210,6 +219,7 @@ function AuthProvider({ children }: { children: ReactNode }) {
     if (isBrowser && !pathname.startsWith('/auth/')) {
       checkAuth();
     } else {
+      // For auth pages, immediately set loading to false
       setIsLoading(false);
     }
     
@@ -309,20 +319,69 @@ function AuthProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       console.error('Logout error:', err);
     } finally {
-      const cookieOptions = {
-        path: '/',
-        ...(typeof window !== 'undefined' && { domain: window.location.hostname }),
-        secure: process.env.NODE_ENV === 'production' ? true : false,
-        sameSite: 'lax' as const,
+      // Clear all auth-related cookies with all possible options to ensure they're removed
+      const clearAllCookies = () => {
+        const cookies = document.cookie.split(';');
+        const domain = window.location.hostname;
+        
+        // Clear cookies with domain
+        cookies.forEach(cookie => {
+          const [name] = cookie.split('=').map(c => c.trim());
+          if (name) {
+            document.cookie = `${name}=; path=/; domain=${domain}; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+            document.cookie = `${name}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+          }
+        });
       };
 
-      deleteCookie('accessToken', cookieOptions);
-      deleteCookie('refreshToken', cookieOptions);
-      deleteCookie('userRole', cookieOptions);
+      try {
+        // Clear cookies using deleteCookie with all possible options
+        const domains = [
+          window.location.hostname,
+          `.${window.location.hostname}`,
+          window.location.hostname.split('.').slice(-2).join('.'),
+          `.${window.location.hostname.split('.').slice(-2).join('.')}`
+        ];
 
+        // Ensure we clear all variations of the cookies
+        ['accessToken', 'refreshToken', 'token', 'userRole', 'auth_token', 'refresh_token'].forEach(cookieName => {
+          // Clear with all possible domain variations
+          domains.forEach(domain => {
+            document.cookie = `${cookieName}=; path=/; domain=${domain}; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+          });
+          // Clear without domain
+          document.cookie = `${cookieName}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+        });
+
+        // Also try the deleteCookie function
+        const cookieOptions = {
+          path: '/',
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax' as const,
+        };
+
+        ['accessToken', 'refreshToken', 'token', 'userRole', 'auth_token', 'refresh_token'].forEach(cookieName => {
+          deleteCookie(cookieName, cookieOptions);
+        });
+
+        // Clear all cookies as a last resort
+        clearAllCookies();
+      } catch (e) {
+        console.error('Error clearing cookies:', e);
+      }
+
+      // Clear local storage and session storage
+      if (typeof window !== 'undefined') {
+        localStorage.clear();
+        sessionStorage.clear();
+      }
+
+      // Reset state
       setUser(null);
       setAccessToken(null);
+      setError(null);
 
+      // Redirect to login
       if (typeof window !== 'undefined') {
         window.location.href = '/auth/login';
       }

@@ -88,20 +88,21 @@ export default function ZoneUserClient({
     
     setIsLoading(true);
     try {
-      const response = await api.get('/admin/zone-users', {
+      const response = await api.get('/zone-users', {
         params: {
           page: newPage,
           search: search,
-          limit: pagination.itemsPerPage
+          limit: pagination.itemsPerPage,
+          role: 'ZONE_USER'
         }
       });
 
-      if (response.data.success) {
-        setZoneUsers(response.data.data.zoneUsers.map((user: any) => ({
+      if (response.data.data) {
+        setZoneUsers(response.data.data.map((user: any) => ({
           ...user,
           id: user.id.toString()
         })));
-        setPagination(response.data.data.pagination);
+        setPagination(response.data.pagination);
       }
     } catch (error) {
       console.error('Failed to fetch zone users:', error);
@@ -135,18 +136,19 @@ export default function ZoneUserClient({
   const fetchZoneUsers = async () => {
     try {
       setIsRefreshing(true);
-      const response = await api.get('/admin/zone-users', {
+      const response = await api.get('/zone-users', {
         params: {
           page: currentPage,
           limit: 20,
           search: search || undefined,
+          role: 'ZONE_USER'
         }
       });
 
-      if (response.data.success) {
-        const newZoneUsers = response.data.data.zoneUsers || response.data.data || [];
+      if (response.data.data) {
+        const newZoneUsers = response.data.data || [];
         setZoneUsers(newZoneUsers);
-        setPagination(response.data.data.pagination || response.data.pagination);
+        setPagination(response.data.pagination);
 
         // Calculate stats
         const newStats = {

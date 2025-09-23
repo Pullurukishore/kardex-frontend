@@ -47,30 +47,39 @@ export function AttendanceWidget({ onStatusChange }: AttendanceWidgetProps = {})
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [location, setLocation] = useState<{ lat: number; lng: number; address?: string } | null>(null);
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
   const [showEarlyCheckoutConfirm, setShowEarlyCheckoutConfirm] = useState(false);
   const [earlyCheckoutData, setEarlyCheckoutData] = useState<any>(null);
   const { toast } = useToast();
 
   useEffect(() => {
     loadAttendanceData();
+    // Automatically request location when component loads
+    getCurrentLocation();
   }, []);
 
   const getCurrentLocation = async () => {
     if (!navigator.geolocation) {
+      const errorMsg = "Geolocation is not supported by your browser.";
+      setLocationError(errorMsg);
       toast({
         title: "Location Unavailable",
-        description: "Geolocation is not supported by your browser.",
+        description: errorMsg,
         variant: "destructive"
       });
       return null;
     }
 
+    setLocationLoading(true);
+    setLocationError(null);
+
     try {
       const position = await new Promise<GeolocationPosition>((resolve, reject) => {
         navigator.geolocation.getCurrentPosition(resolve, reject, {
           enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 0
+          timeout: 15000,
+          maximumAge: 60000 // Allow 1 minute old location
         });
       });
 
@@ -89,15 +98,39 @@ export function AttendanceWidget({ onStatusChange }: AttendanceWidgetProps = {})
 
       const locationData = { lat, lng, address };
       setLocation(locationData);
+      setLocationError(null);
+      
+      toast({
+        title: "Location Detected",
+        description: "Your location has been successfully detected.",
+        variant: "default"
+      });
+      
       return locationData;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error getting location:', error);
+      
+      let errorMessage = "Could not get your current location.";
+      
+      if (error.code === 1) {
+        errorMessage = "Location access denied. Please allow location permissions and try again.";
+      } else if (error.code === 2) {
+        errorMessage = "Location unavailable. Please check your GPS/network connection.";
+      } else if (error.code === 3) {
+        errorMessage = "Location request timed out. Please try again.";
+      }
+      
+      setLocationError(errorMessage);
+      
       toast({
         title: "Location Error",
-        description: "Could not get your current location. Please ensure location services are enabled and try again.",
+        description: errorMessage,
         variant: "destructive"
       });
+      
       return null;
+    } finally {
+      setLocationLoading(false);
     }
   };
 
@@ -358,18 +391,124 @@ export function AttendanceWidget({ onStatusChange }: AttendanceWidgetProps = {})
           </Badge>
         </div>
 
-        {/* Location Info */}
-        <div className="flex items-center justify-between text-sm">
-          <div className="flex items-center space-x-2 text-gray-600">
-            <MapPin className="h-4 w-4" />
-            <span>{location ? 'Location detected' : 'Getting location...'}</span>
-            {location && <CheckCircle className="h-4 w-4 text-green-500" />}
+        {/* Enhanced Location Status */}
+        <div className="space-y-3">
+          {/* Location Status Card */}
+          <div className={`p-4 rounded-lg border-2 transition-all duration-300 ${
+            location 
+              ? 'bg-green-50 border-green-200 shadow-sm' 
+              : locationError 
+                ? 'bg-red-50 border-red-200 shadow-sm'
+                : 'bg-blue-50 border-blue-200 shadow-sm animate-pulse'
+          }`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                {locationLoading ? (
+                  <div className="relative">
+                    <MapPin className="h-6 w-6 text-blue-500" />
+                    <Loader2 className="h-4 w-4 text-blue-600 animate-spin absolute -top-1 -right-1" />
+                  </div>
+                ) : location ? (
+                  <div className="relative">
+                    <MapPin className="h-6 w-6 text-green-600" />
+                    <CheckCircle className="h-4 w-4 text-green-600 absolute -top-1 -right-1 bg-white rounded-full" />
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <MapPin className="h-6 w-6 text-red-500" />
+                    <AlertCircle className="h-4 w-4 text-red-600 absolute -top-1 -right-1 bg-white rounded-full" />
+                  </div>
+                )}
+                
+                <div className="flex-1">
+                  <p className={`font-semibold text-base ${
+                    location 
+                      ? 'text-green-800' 
+                      : locationError 
+                        ? 'text-red-800'
+                        : 'text-blue-800'
+                  }`}>
+                    {locationLoading 
+                      ? 'Getting your location...' 
+                      : location 
+                        ? 'Location Ready ✓' 
+                        : locationError 
+                          ? 'Location Required'
+                          : 'Location Needed'
+                    }
+                  </p>
+                  <p className={`text-sm mt-1 ${
+                    location 
+                      ? 'text-green-700' 
+                      : locationError 
+                        ? 'text-red-700'
+                        : 'text-blue-700'
+                  }`}>
+                    {locationLoading 
+                      ? 'Please allow location access when prompted' 
+                      : location 
+                        ? `📍 ${location.address}` 
+                        : locationError 
+                          ? locationError
+                          : 'Location is required for attendance tracking'
+                    }
+                  </p>
+                </div>
+              </div>
+              
+              {/* Action Button */}
+              {(!location || locationError) && (
+                <Button 
+                  onClick={getCurrentLocation}
+                  disabled={locationLoading}
+                  className={`${
+                    locationError 
+                      ? 'bg-red-600 hover:bg-red-700 text-white' 
+                      : 'bg-blue-600 hover:bg-blue-700 text-white'
+                  } px-4 py-2 font-medium`}
+                  size="sm"
+                >
+                  {locationLoading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      Getting...
+                    </>
+                  ) : (
+                    <>
+                      <MapPin className="h-4 w-4 mr-2" />
+                      {locationError ? 'Try Again' : 'Get Location'}
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
+            
+            {/* Progress indicator for location loading */}
+            {locationLoading && (
+              <div className="mt-3">
+                <div className="w-full bg-blue-200 rounded-full h-2">
+                  <div className="bg-blue-600 h-2 rounded-full animate-pulse" style={{width: '60%'}}></div>
+                </div>
+                <p className="text-xs text-blue-600 mt-1">Requesting location permissions...</p>
+              </div>
+            )}
           </div>
-          {!location && (
-            <Button variant="ghost" size="sm" onClick={getCurrentLocation}>
-              <AlertCircle className="h-4 w-4 mr-1" />
-              Retry
-            </Button>
+          
+          {/* Location Help Text */}
+          {!location && !locationLoading && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+              <div className="flex items-start space-x-2">
+                <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5" />
+                <div className="text-sm">
+                  <p className="font-medium text-amber-800 mb-1">Why do we need your location?</p>
+                  <ul className="text-amber-700 space-y-1 text-xs">
+                    <li>• Required for attendance check-in/check-out</li>
+                    <li>• Helps track work locations and activities</li>
+                    <li>• Ensures accurate time and location logging</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
           )}
         </div>
 
@@ -421,14 +560,18 @@ export function AttendanceWidget({ onStatusChange }: AttendanceWidgetProps = {})
               <Button 
                 onClick={handleCheckIn}
                 disabled={actionLoading || !location}
-                className="flex-1 bg-green-600 hover:bg-green-700"
+                className={`flex-1 ${
+                  !location 
+                    ? 'bg-gray-400 cursor-not-allowed' 
+                    : 'bg-green-600 hover:bg-green-700'
+                }`}
               >
                 {actionLoading ? (
                   <Loader2 className="h-4 w-4 animate-spin mr-2" />
                 ) : (
                   <LogIn className="h-4 w-4 mr-2" />
                 )}
-                Check In
+                {!location ? 'Location Required' : 'Check In'}
               </Button>
               
               {/* Re-check-in button for same day checkout */}
@@ -465,17 +608,6 @@ export function AttendanceWidget({ onStatusChange }: AttendanceWidgetProps = {})
           )}
         </div>
 
-        {/* Location Warning */}
-        {!location && (
-          <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-            <div className="flex items-center">
-              <AlertCircle className="h-4 w-4 text-red-600 mr-2" />
-              <p className="text-sm text-red-700">
-                Location access is required for check-in/check-out. Please allow location permissions.
-              </p>
-            </div>
-          </div>
-        )}
 
         {/* Today's Summary */}
         <div className="pt-2 border-t">

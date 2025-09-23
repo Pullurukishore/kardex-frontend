@@ -27,11 +27,15 @@ const api: AxiosInstance = axios.create({
 // Request interceptor to add auth token and handle token refresh
 api.interceptors.request.use(
   async (config) => {
-    const token = getCookie('accessToken');
+    const accessToken = getCookie('accessToken');
+    const token = getCookie('token');
     
-    if (token) {
+    // Use fallback token logic like other parts of the app
+    const authToken = accessToken || token;
+    
+    if (authToken) {
       // Check if token is expired or about to expire
-      if (isTokenExpired(token)) {
+      if (isTokenExpired(authToken)) {
         try {
           // Skip if already refreshing to prevent multiple refresh attempts (client-side only)
           if (typeof window !== 'undefined' && !window.__isRefreshing) {
@@ -65,7 +69,7 @@ api.interceptors.request.use(
           }
         }
       } else {
-        config.headers.Authorization = `Bearer ${token}`;
+        config.headers.Authorization = `Bearer ${authToken}`;
       }
     }
     

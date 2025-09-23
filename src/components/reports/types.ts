@@ -38,11 +38,13 @@ export interface ServicePersonReport {
   phone?: string;
   zones: string[];
   summary: {
-    totalWorkingDays: number;
+    totalWorkingDays?: number; // Legacy field for compatibility
+    presentDays?: number; // New field from backend
     totalHours: number;
     absentDays: number;
     autoCheckouts: number;
-    activitiesLogged: number;
+    activitiesLogged?: number; // Legacy field for compatibility
+    totalActivities?: number; // New field from backend
     averageHoursPerDay: number;
   };
   flags: Array<{

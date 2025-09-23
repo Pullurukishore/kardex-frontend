@@ -22,7 +22,9 @@ import {
   Star,
   TrendingUp,
   TrendingDown,
-  BarChart3
+  BarChart3,
+  Clock,
+  Timer
 } from "lucide-react";
 import { formatNumber } from "./utils";
 import type { DashboardData } from "./types";
@@ -32,6 +34,32 @@ interface ZonePerformanceAnalyticsProps {
   isRefreshing: boolean;
   onRefresh: () => Promise<void>;
 }
+
+// Helper function to get real zone-specific resolution time from backend data
+const getZoneResolutionTime = (zone: any) => {
+  // Use real backend data if available, otherwise fallback to reasonable default
+  return zone.avgResolutionTimeHours || 24; // Default to 24 hours if no data
+};
+
+// Helper function to format resolution time
+const formatResolutionTime = (hours: number) => {
+  // Ensure we're working with a clean integer
+  const cleanHours = Math.round(hours);
+  
+  if (cleanHours >= 24) {
+    const days = Math.floor(cleanHours / 24);
+    const remainingHours = cleanHours % 24;
+    return remainingHours > 0 ? `${days}d ${remainingHours}h` : `${days}d`;
+  }
+  return `${cleanHours}h`;
+};
+
+// Helper function to get resolution time performance level
+const getResolutionTimePerformance = (hours: number) => {
+  if (hours <= 24) return { level: 'Excellent', color: 'bg-green-500', bgClass: 'bg-green-100 text-green-800' };
+  if (hours <= 48) return { level: 'Good', color: 'bg-yellow-500', bgClass: 'bg-yellow-100 text-yellow-800' };
+  return { level: 'Needs Improvement', color: 'bg-red-500', bgClass: 'bg-red-100 text-red-800' };
+};
 
 export default function ZonePerformanceAnalytics({ 
   dashboardData, 
@@ -145,9 +173,11 @@ export default function ZonePerformanceAnalytics({
                     <p className="text-xs text-blue-600">Total Tickets</p>
                   </div>
                   <div className="text-center p-3 bg-green-50 rounded-lg">
-                    <Users className="w-5 h-5 text-green-600 mx-auto mb-1" />
-                    <p className="text-2xl font-bold text-green-900">{zone.servicePersonCount}</p>
-                    <p className="text-xs text-green-600">Service Staff</p>
+                    <Clock className="w-5 h-5 text-green-600 mx-auto mb-1" />
+                    <p className="text-2xl font-bold text-green-900">
+                      {formatResolutionTime(getZoneResolutionTime(zone))}
+                    </p>
+                    <p className="text-xs text-green-600">Avg Resolution</p>
                   </div>
                 </div>
 
@@ -164,13 +194,13 @@ export default function ZonePerformanceAnalytics({
                   
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <Users className="w-4 h-4 text-green-600" />
-                      <span className="text-sm font-medium text-slate-700">Service Staff</span>
+                      <Timer className="w-4 h-4 text-blue-600" />
+                      <span className="text-sm font-medium text-slate-700">Resolution Time</span>
                     </div>
                     <div className="flex items-center gap-1">
-                      <Users className="w-4 h-4 text-slate-400" />
+                      <Clock className="w-4 h-4 text-slate-400" />
                       <span className="font-semibold text-slate-900">
-                        {zone.servicePersonCount} {zone.servicePersonCount === 1 ? 'staff' : 'staff'}
+                        {formatResolutionTime(getZoneResolutionTime(zone))} avg
                       </span>
                     </div>
                   </div>
@@ -187,17 +217,19 @@ export default function ZonePerformanceAnalytics({
                   
                   <div className="pt-2">
                     <div className="flex justify-between text-xs text-slate-500 mb-1">
-                      <span>Resource Utilization</span>
-                      <span>{(zone.servicePersonCount > 0 ? (zone.totalTickets / zone.servicePersonCount).toFixed(1) : 0)} tickets/staff</span>
+                      <span>Avg Resolution Time</span>
+                      <span>{formatResolutionTime(getZoneResolutionTime(zone))}</span>
                     </div>
                     <Progress 
-                      value={Math.min(100, (zone.servicePersonCount > 0 ? (zone.totalTickets / zone.servicePersonCount / 5) * 100 : 0))} 
-                      className={`h-2 ${zone.totalTickets > 0 ? '[&>div]:bg-green-500' : '[&>div]:bg-slate-200'}`}
+                      value={(() => {
+                        const resolutionHours = getZoneResolutionTime(zone);
+                        // Invert progress - lower resolution time = better (higher progress)
+                        return Math.max(10, 100 - Math.min(90, (resolutionHours / 72) * 100));
+                      })()} 
+                      className={`h-2 [&>div]:${getResolutionTimePerformance(getZoneResolutionTime(zone)).color}`}
                     />
                     <p className="text-xs text-slate-400 mt-1">
-                      {zone.servicePersonCount > 0 
-                        ? `${zone.servicePersonCount} staff managing ${zone.totalTickets} tickets`
-                        : 'No staff assigned'}
+                      {getResolutionTimePerformance(getZoneResolutionTime(zone)).level.toLowerCase()} resolution time
                     </p>
                   </div>
                 </div>
@@ -285,14 +317,16 @@ export default function ZonePerformanceAnalytics({
               <div className="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2">
                   <h4 className="font-semibold text-lg mb-4 flex items-center gap-2">
-                    <Target className="w-5 h-5 text-indigo-600" />
-                    Zone Efficiency Analysis
+                    <Timer className="w-5 h-5 text-indigo-600" />
+                    Zone Resolution Time Analysis
                   </h4>
                   <div className="space-y-4">
                     {(dashboardData?.adminStats?.zoneWiseTickets || []).slice(0, 5).map((zone, i) => {
-                      const efficiency = zone.servicePersonCount > 0 ? (zone.totalTickets / zone.servicePersonCount) : 0;
-                      const maxEfficiency = Math.max(...(dashboardData?.adminStats?.zoneWiseTickets || []).map(z => z.servicePersonCount > 0 ? z.totalTickets / z.servicePersonCount : 0));
-                      const efficiencyPercentage = maxEfficiency > 0 ? (efficiency / maxEfficiency) * 100 : 0;
+                      const resolutionHours = getZoneResolutionTime(zone);
+                      const maxResolutionTime = Math.max(...(dashboardData?.adminStats?.zoneWiseTickets || []).map(z => getZoneResolutionTime(z)));
+                      // Invert percentage for resolution time (lower is better)
+                      const performancePercentage = maxResolutionTime > 0 ? Math.max(10, 100 - ((resolutionHours / maxResolutionTime) * 100)) : 0;
+                      const performance = getResolutionTimePerformance(resolutionHours);
                       
                       return (
                         <div key={zone.id} className="flex items-center justify-between p-4 bg-white/80 rounded-xl shadow-sm hover:shadow-md transition-all duration-300">
@@ -310,17 +344,13 @@ export default function ZonePerformanceAnalytics({
                           <div className="text-right min-w-[120px]">
                             <div className="flex items-center gap-2 mb-1">
                               <span className="text-sm font-semibold text-slate-700">
-                                {efficiency.toFixed(1)} tickets/staff
+                                {formatResolutionTime(resolutionHours)}
                               </span>
-                              <div className={`px-2 py-1 rounded-full text-xs font-bold ${
-                                efficiency > 3 ? 'bg-red-100 text-red-800' :
-                                efficiency > 2 ? 'bg-yellow-100 text-yellow-800' :
-                                'bg-green-100 text-green-800'
-                              }`}>
-                                {efficiency > 3 ? 'High Load' : efficiency > 2 ? 'Moderate' : 'Optimal'}
+                              <div className={`px-2 py-1 rounded-full text-xs font-bold ${performance.bgClass}`}>
+                                {performance.level}
                               </div>
                             </div>
-                            <Progress value={Math.min(100, efficiencyPercentage)} className="h-2 w-24" />
+                            <Progress value={Math.min(100, performancePercentage)} className="h-2 w-24" />
                           </div>
                         </div>
                       );
@@ -331,31 +361,38 @@ export default function ZonePerformanceAnalytics({
                 <div>
                   <h4 className="font-semibold text-lg mb-4 flex items-center gap-2">
                     <Award className="w-5 h-5 text-green-600" />
-                    Top Performing Zones
+                    Fastest Resolution Zones
                   </h4>
                   <div className="space-y-3">
                     {(dashboardData?.adminStats?.zoneWiseTickets || [])
                       .filter(zone => zone.servicePersonCount > 0)
-                      .sort((a, b) => (b.totalTickets / b.servicePersonCount) - (a.totalTickets / a.servicePersonCount))
+                      .sort((a, b) => {
+                        const aResolutionTime = getZoneResolutionTime(a);
+                        const bResolutionTime = getZoneResolutionTime(b);
+                        return aResolutionTime - bResolutionTime; // Sort by fastest (lowest) resolution time
+                      })
                       .slice(0, 3)
-                      .map((zone, i) => (
-                        <div key={zone.id} className="flex items-center gap-3 p-3 bg-white/80 rounded-lg shadow-sm">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
-                            i === 0 ? 'bg-yellow-100 text-yellow-800' :
-                            i === 1 ? 'bg-gray-100 text-gray-800' :
-                            'bg-orange-100 text-orange-800'
-                          }`}>
-                            {i + 1}
+                      .map((zone, i) => {
+                        const resolutionHours = getZoneResolutionTime(zone);
+                        return (
+                          <div key={zone.id} className="flex items-center gap-3 p-3 bg-white/80 rounded-lg shadow-sm">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                              i === 0 ? 'bg-yellow-100 text-yellow-800' :
+                              i === 1 ? 'bg-gray-100 text-gray-800' :
+                              'bg-orange-100 text-orange-800'
+                            }`}>
+                              {i + 1}
+                            </div>
+                            <div className="flex-1">
+                              <p className="font-semibold text-slate-800 text-sm">{zone.name}</p>
+                              <p className="text-xs text-slate-600">
+                                {formatResolutionTime(resolutionHours)} avg resolution
+                              </p>
+                            </div>
+                            {i === 0 && <Star className="w-4 h-4 text-yellow-500" />}
                           </div>
-                          <div className="flex-1">
-                            <p className="font-semibold text-slate-800 text-sm">{zone.name}</p>
-                            <p className="text-xs text-slate-600">
-                              {(zone.totalTickets / zone.servicePersonCount).toFixed(1)} efficiency score
-                            </p>
-                          </div>
-                          {i === 0 && <Star className="w-4 h-4 text-yellow-500" />}
-                        </div>
-                      ))}
+                        );
+                      })}
                   </div>
                 </div>
               </div>

@@ -245,7 +245,7 @@ export function ServicePersonAttendanceReport({ reportData }: ServicePersonAtten
                       <td className="p-3">
                         <div className="flex items-center gap-1 text-sm font-medium">
                           <Calendar className="h-3 w-3 text-green-600" />
-                          {person.summary.totalWorkingDays}
+                          {person.summary.presentDays || person.summary.totalWorkingDays || 0}
                         </div>
                       </td>
 
@@ -282,7 +282,7 @@ export function ServicePersonAttendanceReport({ reportData }: ServicePersonAtten
                       <td className="p-3">
                         <div className="flex items-center gap-1 text-sm font-medium">
                           <Activity className="h-3 w-3 text-purple-600" />
-                          {person.summary.activitiesLogged}
+                          {person.summary.totalActivities || person.summary.activitiesLogged || 0}
                         </div>
                       </td>
 
@@ -370,7 +370,7 @@ export function ServicePersonAttendanceReport({ reportData }: ServicePersonAtten
                     </CardHeader>
                     <CardContent>
                       <div className="text-2xl font-bold text-green-600">
-                        {selectedPerson.summary.totalWorkingDays}
+                        {selectedPerson.summary.presentDays || selectedPerson.summary.totalWorkingDays || 0}
                       </div>
                     </CardContent>
                   </Card>
@@ -403,7 +403,7 @@ export function ServicePersonAttendanceReport({ reportData }: ServicePersonAtten
                     </CardHeader>
                     <CardContent>
                       <div className="text-2xl font-bold text-purple-600">
-                        {selectedPerson.summary.activitiesLogged}
+                        {selectedPerson.summary.totalActivities || selectedPerson.summary.activitiesLogged || 0}
                       </div>
                     </CardContent>
                   </Card>
