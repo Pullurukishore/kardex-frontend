@@ -14,7 +14,9 @@ import {
   Settings,
   Wrench,
   TrendingUp,
-  TrendingDown
+  TrendingDown,
+  Navigation,
+  Clock
 } from "lucide-react";
 import { formatDuration } from "./utils";
 import type { DashboardData } from "./types";
@@ -51,27 +53,30 @@ export default function FieldServiceAnalytics({ dashboardData }: FieldServiceAna
       bgColor: "bg-emerald-50"
     },
     {
-      title: "Resolution Performance",
-      value: `${dashboardData?.stats?.avgResolutionTime?.days || 0}d ${dashboardData?.stats?.avgResolutionTime?.hours || 0}h`,
-      subtitle: "Average resolution time",
-      change: dashboardData?.stats?.avgResolutionTime?.change || 0,
-      isPositive: dashboardData?.stats?.avgResolutionTime?.isPositive !== false,
-      icon: CheckCircle,
+      title: "Avg Travel Time",
+      value: formatDuration(
+        dashboardData?.stats?.avgTravelTime?.hours || 0,
+        dashboardData?.stats?.avgTravelTime?.minutes || 0
+      ),
+      subtitle: "Total travel time (going + returning)",
+      change: dashboardData?.stats?.avgTravelTime?.change || 0,
+      isPositive: dashboardData?.stats?.avgTravelTime?.isPositive !== false,
+      icon: Navigation,
       color: "from-purple-500 to-violet-600",
       bgColor: "bg-purple-50"
     },
     {
-      title: "Critical Workload",
-      value: `${dashboardData?.stats?.kpis?.unassignedTickets?.value || 0}`,
-      subtitle: "Tickets awaiting assignment",
-      critical: (dashboardData?.stats?.kpis?.unassignedTickets?.value || 0) > 5,
-      icon: AlertTriangle,
-      color: (dashboardData?.stats?.kpis?.unassignedTickets?.value || 0) > 5 
-        ? "from-red-500 to-pink-600" 
-        : "from-orange-500 to-amber-600",
-      bgColor: (dashboardData?.stats?.kpis?.unassignedTickets?.value || 0) > 5 
-        ? "bg-red-50" 
-        : "bg-orange-50"
+      title: "Avg Onsite Resolution Time",
+      value: formatDuration(
+        dashboardData?.stats?.avgOnsiteResolutionTime?.hours || 0,
+        dashboardData?.stats?.avgOnsiteResolutionTime?.minutes || 0
+      ),
+      subtitle: "Onsite in-progress to resolved",
+      change: dashboardData?.stats?.avgOnsiteResolutionTime?.change || 0,
+      isPositive: dashboardData?.stats?.avgOnsiteResolutionTime?.isPositive !== false,
+      icon: Clock,
+      color: "from-orange-500 to-amber-600",
+      bgColor: "bg-orange-50"
     }
   ];
 
@@ -112,7 +117,7 @@ export default function FieldServiceAnalytics({ dashboardData }: FieldServiceAna
                       <span className="text-sm font-medium">{metric.change > 0 ? '+' : ''}{metric.change}%</span>
                     </div>
                   )}
-                  {metric.critical && (
+                  {(metric as any).critical && (
                     <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-red-100 text-red-700">
                       <AlertTriangle className="w-4 h-4" />
                       <span className="text-sm font-medium">Critical</span>

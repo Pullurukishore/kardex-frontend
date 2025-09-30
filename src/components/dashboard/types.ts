@@ -4,8 +4,10 @@ export interface DashboardData {
     unassignedTickets: { count: number; critical: boolean };
     inProgressTickets: { count: number; change: number };
     avgResponseTime: { hours: number; minutes: number; change: number; isPositive: boolean };
-    avgResolutionTime: { days: number; hours: number; change: number; isPositive: boolean };
+    avgResolutionTime: { days: number; hours: number; minutes: number; change: number; isPositive: boolean };
     avgDowntime: { hours: number; minutes: number; change: number; isPositive: boolean };
+    avgTravelTime: { hours: number; minutes: number; change: number; isPositive: boolean };
+    avgOnsiteResolutionTime: { hours: number; minutes: number; change: number; isPositive: boolean };
     monthlyTickets: { count: number; change: number };
     activeMachines: { count: number; change: number };
     ticketDistribution: {

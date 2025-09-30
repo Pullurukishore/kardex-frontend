@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { AlertCircle, Users, Clock, CheckCircle, XCircle, Eye } from 'lucide-react';
 import { format } from 'date-fns';
 import Link from 'next/link';
+import { cn } from '@/lib/utils';
 
 interface TicketClientProps {
   initialTickets: Ticket[];
@@ -79,6 +80,18 @@ export default function TicketClient({
   const [stats, setStats] = useState(initialStats);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Detect mobile screen size
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768); // md breakpoint
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   const fetchTicketData = async () => {
     try {
@@ -158,119 +171,286 @@ export default function TicketClient({
   }
 
   return (
-    <div className="space-y-6">
+    <div className={cn("space-y-6", isMobile ? "space-y-4" : "space-y-6")}>
       {/* Refresh Button */}
       <div className="flex justify-end">
         <button
           onClick={handleRefresh}
           disabled={isRefreshing}
-          className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md ${
+          className={cn(
+            "flex items-center gap-2 font-medium rounded-md touch-manipulation",
+            isMobile ? "px-3 py-2 text-sm w-full justify-center" : "px-4 py-2 text-sm",
             isRefreshing 
               ? 'bg-gray-200 text-gray-500 cursor-not-allowed' 
               : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
-          }`}
+          )}
         >
-          <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+          <RefreshCw className={cn(
+            isRefreshing ? 'animate-spin' : '',
+            isMobile ? "w-5 h-5" : "w-4 h-4"
+          )} />
           {isRefreshing ? 'Refreshing...' : 'Refresh Data'}
         </button>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
-        <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-blue-600">Total Tickets</p>
-                <p className="text-2xl font-bold text-blue-900">{stats.total}</p>
+      <div className={cn(
+        "grid gap-4",
+        isMobile 
+          ? "grid-cols-2 gap-3" 
+          : "grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6"
+      )}>
+        <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200 touch-manipulation">
+          <CardContent className={isMobile ? "p-3" : "p-6"}>
+            <div className={cn(
+              "flex items-center justify-between",
+              isMobile ? "flex-col gap-2" : "flex-row"
+            )}>
+              <div className={isMobile ? "text-center" : ""}>
+                <p className={cn(
+                  "font-medium text-blue-600",
+                  isMobile ? "text-xs" : "text-sm"
+                )}>Total Tickets</p>
+                <p className={cn(
+                  "font-bold text-blue-900",
+                  isMobile ? "text-xl" : "text-2xl"
+                )}>{stats.total}</p>
               </div>
-              <div className="h-12 w-12 rounded-full bg-blue-500 flex items-center justify-center">
-                <AlertCircle className="h-6 w-6 text-white" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-green-600">Open</p>
-                <p className="text-2xl font-bold text-green-900">{stats.open}</p>
-              </div>
-              <div className="h-12 w-12 rounded-full bg-green-500 flex items-center justify-center">
-                <Clock className="h-6 w-6 text-white" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-gradient-to-br from-yellow-50 to-yellow-100 border-yellow-200">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-yellow-600">Assigned</p>
-                <p className="text-2xl font-bold text-yellow-900">{stats.assigned}</p>
-              </div>
-              <div className="h-12 w-12 rounded-full bg-yellow-500 flex items-center justify-center">
-                <Users className="h-6 w-6 text-white" />
+              <div className={cn(
+                "rounded-full bg-blue-500 flex items-center justify-center",
+                isMobile ? "h-8 w-8" : "h-12 w-12"
+              )}>
+                <AlertCircle className={cn(
+                  "text-white",
+                  isMobile ? "h-4 w-4" : "h-6 w-6"
+                )} />
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-purple-600">Closed</p>
-                <p className="text-2xl font-bold text-purple-900">{stats.closed}</p>
+        <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200 touch-manipulation">
+          <CardContent className={isMobile ? "p-3" : "p-6"}>
+            <div className={cn(
+              "flex items-center justify-between",
+              isMobile ? "flex-col gap-2" : "flex-row"
+            )}>
+              <div className={isMobile ? "text-center" : ""}>
+                <p className={cn(
+                  "font-medium text-green-600",
+                  isMobile ? "text-xs" : "text-sm"
+                )}>Open</p>
+                <p className={cn(
+                  "font-bold text-green-900",
+                  isMobile ? "text-xl" : "text-2xl"
+                )}>{stats.open}</p>
               </div>
-              <div className="h-12 w-12 rounded-full bg-purple-500 flex items-center justify-center">
-                <CheckCircle className="h-6 w-6 text-white" />
+              <div className={cn(
+                "rounded-full bg-green-500 flex items-center justify-center",
+                isMobile ? "h-8 w-8" : "h-12 w-12"
+              )}>
+                <Clock className={cn(
+                  "text-white",
+                  isMobile ? "h-4 w-4" : "h-6 w-6"
+                )} />
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="bg-gradient-to-br from-red-50 to-red-100 border-red-200">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-red-600">Critical</p>
-                <p className="text-2xl font-bold text-red-900">{stats.critical}</p>
+        <Card className={cn(
+          "bg-gradient-to-br from-yellow-50 to-yellow-100 border-yellow-200 touch-manipulation",
+          isMobile ? "col-span-2" : ""
+        )}>
+          <CardContent className={isMobile ? "p-3" : "p-6"}>
+            <div className={cn(
+              "flex items-center justify-between",
+              isMobile ? "flex-col gap-2" : "flex-row"
+            )}>
+              <div className={isMobile ? "text-center" : ""}>
+                <p className={cn(
+                  "font-medium text-yellow-600",
+                  isMobile ? "text-xs" : "text-sm"
+                )}>Assigned</p>
+                <p className={cn(
+                  "font-bold text-yellow-900",
+                  isMobile ? "text-xl" : "text-2xl"
+                )}>{stats.assigned}</p>
               </div>
-              <div className="h-12 w-12 rounded-full bg-red-500 flex items-center justify-center">
-                <XCircle className="h-6 w-6 text-white" />
+              <div className={cn(
+                "rounded-full bg-yellow-500 flex items-center justify-center",
+                isMobile ? "h-8 w-8" : "h-12 w-12"
+              )}>
+                <Users className={cn(
+                  "text-white",
+                  isMobile ? "h-4 w-4" : "h-6 w-6"
+                )} />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200 touch-manipulation">
+          <CardContent className={isMobile ? "p-3" : "p-6"}>
+            <div className={cn(
+              "flex items-center justify-between",
+              isMobile ? "flex-col gap-2" : "flex-row"
+            )}>
+              <div className={isMobile ? "text-center" : ""}>
+                <p className={cn(
+                  "font-medium text-purple-600",
+                  isMobile ? "text-xs" : "text-sm"
+                )}>Closed</p>
+                <p className={cn(
+                  "font-bold text-purple-900",
+                  isMobile ? "text-xl" : "text-2xl"
+                )}>{stats.closed}</p>
+              </div>
+              <div className={cn(
+                "rounded-full bg-purple-500 flex items-center justify-center",
+                isMobile ? "h-8 w-8" : "h-12 w-12"
+              )}>
+                <CheckCircle className={cn(
+                  "text-white",
+                  isMobile ? "h-4 w-4" : "h-6 w-6"
+                )} />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gradient-to-br from-red-50 to-red-100 border-red-200 touch-manipulation">
+          <CardContent className={isMobile ? "p-3" : "p-6"}>
+            <div className={cn(
+              "flex items-center justify-between",
+              isMobile ? "flex-col gap-2" : "flex-row"
+            )}>
+              <div className={isMobile ? "text-center" : ""}>
+                <p className={cn(
+                  "font-medium text-red-600",
+                  isMobile ? "text-xs" : "text-sm"
+                )}>Critical</p>
+                <p className={cn(
+                  "font-bold text-red-900",
+                  isMobile ? "text-xl" : "text-2xl"
+                )}>{stats.critical}</p>
+              </div>
+              <div className={cn(
+                "rounded-full bg-red-500 flex items-center justify-center",
+                isMobile ? "h-8 w-8" : "h-12 w-12"
+              )}>
+                <XCircle className={cn(
+                  "text-white",
+                  isMobile ? "h-4 w-4" : "h-6 w-6"
+                )} />
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Tickets Table */}
+      {/* Tickets Table/Cards */}
       <Card className="shadow-lg">
-        <CardHeader className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-t-lg">
-          <CardTitle className="text-gray-800 flex items-center gap-2">
-            <AlertCircle className="h-5 w-5 text-blue-600" />
+        <CardHeader className={cn(
+          "bg-gradient-to-r from-blue-50 to-purple-50 rounded-t-lg",
+          isMobile ? "p-4" : "p-6"
+        )}>
+          <CardTitle className={cn(
+            "text-gray-800 flex items-center gap-2",
+            isMobile ? "text-lg" : "text-xl"
+          )}>
+            <AlertCircle className={cn(
+              "text-blue-600",
+              isMobile ? "h-4 w-4" : "h-5 w-5"
+            )} />
             Tickets ({tickets.length})
           </CardTitle>
-          <CardDescription>
+          <CardDescription className={isMobile ? "text-sm" : ""}>
             Manage and track service tickets
           </CardDescription>
         </CardHeader>
-        <CardContent className="p-0">
+        <CardContent className={isMobile ? "p-4" : "p-0"}>
           {tickets.length === 0 ? (
-            <div className="text-center py-12">
-              <div className="mx-auto h-24 w-24 rounded-full bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center mb-4">
-                <AlertCircle className="h-12 w-12 text-blue-500" />
+            <div className={cn(
+              "text-center",
+              isMobile ? "py-8" : "py-12"
+            )}>
+              <div className={cn(
+                "mx-auto rounded-full bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center mb-4",
+                isMobile ? "h-16 w-16" : "h-24 w-24"
+              )}>
+                <AlertCircle className={cn(
+                  "text-blue-500",
+                  isMobile ? "h-8 w-8" : "h-12 w-12"
+                )} />
               </div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">No tickets found</h3>
-              <p className="text-gray-500 mb-6">
+              <h3 className={cn(
+                "font-semibold text-gray-900 mb-2",
+                isMobile ? "text-base" : "text-lg"
+              )}>No tickets found</h3>
+              <p className={cn(
+                "text-gray-500 mb-6",
+                isMobile ? "text-sm" : ""
+              )}>
                 No tickets match your current filters.
               </p>
             </div>
+          ) : isMobile ? (
+            // Mobile Card Layout
+            <div className="space-y-3">
+              {tickets.map((ticket) => (
+                <Card key={ticket.id} className="border border-gray-200 hover:shadow-md transition-shadow duration-200 touch-manipulation">
+                  <CardContent className="p-4">
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex items-center gap-3 flex-1">
+                        <Link href={`/admin/tickets/${ticket.id}/list`} className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold text-xs hover:from-blue-600 hover:to-purple-700 transition-colors duration-200">
+                          #{ticket.id}
+                        </Link>
+                        <div className="flex-1 min-w-0">
+                          <Link href={`/admin/tickets/${ticket.id}/list`} className="font-semibold text-gray-900 hover:text-blue-600 transition-colors duration-200 text-sm block truncate">
+                            {ticket.title}
+                          </Link>
+                          <div className="text-xs text-gray-500 mt-1 line-clamp-2">
+                            {ticket.description}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="flex flex-wrap gap-2 mb-3">
+                      <Badge variant={getStatusBadgeVariant(ticket.status)} className="text-xs">
+                        {ticket.status.replace(/_/g, ' ')}
+                      </Badge>
+                      <Badge variant={getPriorityBadgeVariant(ticket.priority)} className="text-xs">
+                        {ticket.priority}
+                      </Badge>
+                    </div>
+                    
+                    <div className="flex items-center justify-between text-xs text-gray-500">
+                      <div className="flex flex-col gap-1">
+                        <span className="font-medium">Customer:</span>
+                        <span>{ticket.customer?.companyName || 'N/A'}</span>
+                      </div>
+                      <div className="flex flex-col gap-1 text-right">
+                        <span className="font-medium">Created:</span>
+                        <span>{format(new Date(ticket.createdAt), 'MMM dd, yyyy')}</span>
+                      </div>
+                    </div>
+                    
+                    <div className="mt-3 pt-3 border-t border-gray-100">
+                      <Link href={`/admin/tickets/${ticket.id}/list`} className="block">
+                        <button className="w-full inline-flex items-center justify-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 touch-manipulation">
+                          <Eye className="h-4 w-4 mr-2" />
+                          View Ticket
+                        </button>
+                      </Link>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
           ) : (
+            // Desktop Table Layout
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-gray-50">

@@ -2,12 +2,17 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import Image from "next/image";
+import { usePathname, useRouter } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { UserRole } from "@/types/user.types";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { NavItemSkeleton } from "@/components/ui/NavigationLoading";
+import { preloadRoute } from "@/lib/browser";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   LayoutDashboard,
   Users,
@@ -31,7 +36,6 @@ import {
   X,
   Calendar,
   Ticket,
-  Zap,
   Activity,
   Sparkles,
 } from "lucide-react";
@@ -59,9 +63,7 @@ const navigation: NavItem[] = [
 
   // Service Person
   { title: "Dashboard", href: "/service-person/dashboard", icon: LayoutDashboard, roles: [UserRole.SERVICE_PERSON] },
-  { title: "My Activity", href: "/service-person/activity", icon: Calendar, roles: [UserRole.SERVICE_PERSON] },
   { title: "My Tickets", href: "/service-person/tickets", icon: Ticket, roles: [UserRole.SERVICE_PERSON] },
-  { title: "Performance Reports", href: "/service-person/reports", icon: BarChart2, roles: [UserRole.SERVICE_PERSON] },
 
   // Zone User
   { title: "Dashboard", href: "/zone/dashboard", icon: LayoutDashboard, roles: [UserRole.ZONE_USER] },
@@ -79,19 +81,8 @@ interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> {
   onClose?: () => void;
 }
 
-const ClientOnly = ({ children }: { children: React.ReactNode }) => {
-  const [mounted, setMounted] = React.useState(false);
-
-  React.useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  if (!mounted) {
-    return null;
-  }
-
-  return <>{children}</>;
-};
+// Removed ClientOnly wrapper to prevent hydration delays
+// Using suppressHydrationWarning for client-only content instead
 
 export function Sidebar({
   userRole,
@@ -101,8 +92,42 @@ export function Sidebar({
   setCollapsed,
 }: SidebarProps): JSX.Element {
   const pathname = usePathname();
+  const router = useRouter();
+  const { logout } = useAuth();
   const [hoveredItem, setHoveredItem] = React.useState<string | null>(null);
-  const [pendingHref, setPendingHref] = React.useState<string | null>(null);
+  const [isMobile, setIsMobile] = React.useState(false);
+  const [isInitialLoad, setIsInitialLoad] = React.useState(true);
+  const [reducedMotion, setReducedMotion] = React.useState(false);
+
+  // Detect mobile screen size
+  React.useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 1024); // lg breakpoint
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  // Respect prefers-reduced-motion for accessibility
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const update = () => setReducedMotion(media.matches);
+    update();
+    media.addEventListener?.('change', update);
+    return () => media.removeEventListener?.('change', update);
+  }, []);
+
+  // Handle initial load animation - reduced delay
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsInitialLoad(false);
+    }, 50); // Reduced from 300ms to 50ms
+    return () => clearTimeout(timer);
+  }, []);
+
 
   const filteredNavItems = React.useMemo(() => {
     if (!userRole) return [];
@@ -114,18 +139,35 @@ export function Sidebar({
       e.preventDefault();
       return;
     }
-    setPendingHref(item.href);
-    requestAnimationFrame(() => {
+    
+    e.preventDefault();
+    
+    // Direct navigation without loading states for smooth experience
+    router.push(item.href);
+    
+    // Close mobile sidebar immediately
+    if (isMobile) {
       onClose?.();
-    });
-  }, [onClose]);
+    }
+  }, [router, onClose, isMobile]);
 
-  React.useEffect(() => {
-    setPendingHref(null);
-  }, [pathname]);
+  const handleItemHover = React.useCallback((item: NavItem) => {
+    if (!isMobile && !item.disabled) {
+      setHoveredItem(item.href);
+      // Preload route on hover for faster navigation
+      preloadRoute(item.href);
+    }
+  }, [isMobile]);
 
-  const renderNavItem = React.useCallback((item: NavItem) => {
-    const isActive = (pathname?.startsWith(item.href) ?? false) || pendingHref === item.href;
+  const handleItemLeave = React.useCallback(() => {
+    if (!isMobile) {
+      setHoveredItem(null);
+    }
+  }, [isMobile]);
+
+
+  const renderNavItem = React.useCallback((item: NavItem, index: number) => {
+    const isActive = pathname?.startsWith(item.href) ?? false;
     const Icon = item.icon;
     const isHovered = hoveredItem === item.href;
 
@@ -134,126 +176,211 @@ export function Sidebar({
     }
 
     return (
-      <ClientOnly>
-        <Link
-          href={item.disabled ? "#" : item.href}
-          onClick={(e) => handleItemClick(e, item)}
-          onMouseEnter={() => setHoveredItem(item.href)}
-          onMouseLeave={() => setHoveredItem(null)}
-          prefetch={true}
-          replace={isActive}
-          shallow={true}
-          scroll={false}
-          aria-current={isActive ? 'page' : undefined}
-          className={cn(
-            "group relative flex items-center rounded-xl px-3 py-3 text-sm font-medium transition-all duration-300 ease-out overflow-hidden backdrop-blur-sm",
-            "before:absolute before:inset-0 before:rounded-xl before:transition-all before:duration-300",
-            isActive
-              ? "bg-gradient-to-r from-blue-500/90 via-indigo-500/90 to-purple-500/90 text-white shadow-lg shadow-blue-500/25 before:bg-white/10"
-              : "text-slate-700 hover:text-slate-900 hover:bg-white/60 hover:shadow-md hover:shadow-slate-200/50 before:bg-transparent hover:before:bg-gradient-to-r hover:before:from-blue-50/80 hover:before:to-indigo-50/80",
-            item.disabled && "cursor-not-allowed opacity-60",
-            "transform hover:scale-[1.02] active:scale-[0.98]"
-          )}
-        >
-          {/* Active indicator */}
-          {isActive && (
-            <div className="absolute left-0 top-1/2 h-8 w-1 -translate-y-1/2 rounded-r-full bg-white/80 shadow-sm" />
-          )}
-          
-          {/* Hover glow effect */}
-          <div className={cn(
-            "absolute inset-0 rounded-xl opacity-0 transition-opacity duration-300",
-            isHovered && !isActive && "opacity-100 bg-gradient-to-r from-blue-500/5 via-indigo-500/5 to-purple-500/5"
-          )} />
-          
-          <Icon
-            className={cn(
-              "h-5 w-5 flex-shrink-0 transition-all duration-300 relative z-10",
-              isActive
-                ? "text-white drop-shadow-sm transform scale-110"
-                : "text-slate-500 group-hover:text-blue-600 group-hover:scale-110"
-            )}
-          />
-          {!collapsed && (
-            <span className="ml-3 flex flex-1 items-center justify-between relative z-10">
-              <span className="truncate font-medium">{item.title}</span>
-              {item.badge && (
-                <span
-                  className="ml-2 rounded-full bg-gradient-to-r from-pink-500 to-orange-500 px-2.5 py-1 text-xs font-bold text-white shadow-lg animate-pulse"
-                >
-                  {item.badge}
-                </span>
+      <motion.div
+        key={item.href}
+        initial={isInitialLoad ? { opacity: 0, x: -10 } : false}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ 
+          duration: 0.15, // Reduced from 0.3s to 0.15s
+          delay: isInitialLoad ? index * 0.02 : 0, // Reduced from 0.05 to 0.02
+          ease: "easeOut" 
+        }}
+        suppressHydrationWarning
+      >
+          <motion.div
+            whileHover={{ scale: isMobile ? 1 : 1.01, y: isMobile ? 0 : -1 }}
+            whileTap={{ scale: 0.98 }}
+            transition={{ duration: 0.15, ease: "easeOut" }}
+          >
+            <button
+              onClick={(e) => handleItemClick(e, item)}
+              onMouseEnter={() => handleItemHover(item)}
+              onMouseLeave={handleItemLeave}
+              onTouchStart={() => isMobile && setHoveredItem(item.href)}
+              onTouchEnd={() => isMobile && setHoveredItem(null)}
+              aria-current={isActive ? 'page' : undefined}
+              aria-label={item.title}
+              className={cn(
+                "group relative flex items-center rounded-xl transition-all duration-200 ease-out w-full focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:ring-offset-2 focus:ring-offset-transparent",
+                // Mobile-optimized padding and sizing
+                isMobile ? "px-4 py-4 text-base font-medium min-h-[56px]" : "px-3 py-3 text-sm font-medium",
+                isActive
+                  ? "bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 text-white shadow-lg shadow-blue-500/30"
+                  : "text-slate-700 hover:text-slate-900 hover:bg-white/80 hover:shadow-sm",
+                // Mobile touch optimization
+                isMobile ? "touch-manipulation" : ""
               )}
-            </span>
-          )}
-        </Link>
-      </ClientOnly>
+              title={collapsed && !isMobile ? item.title : undefined}
+              >
+                {/* Active indicator */}
+                <AnimatePresence>
+                  {isActive && (
+                    <motion.div 
+                      initial={{ scaleY: 0 }}
+                      animate={{ scaleY: 1 }}
+                      exit={{ scaleY: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="absolute left-0 top-1/2 h-8 w-1 -translate-y-1/2 rounded-r-full bg-white/80 shadow-sm" 
+                    />
+                  )}
+                </AnimatePresence>
+                
+                {/* Hover glow effect */}
+                <AnimatePresence>
+                  {isHovered && !isActive && (
+                    <motion.div 
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      transition={{ duration: 0.15, ease: "easeOut" }}
+                      className="absolute inset-0 rounded-xl bg-gradient-to-r from-blue-500/8 via-indigo-500/8 to-purple-500/8" 
+                    />
+                  )}
+                </AnimatePresence>
+                
+                <Icon
+                  className={cn(
+                    "flex-shrink-0 transition-all duration-200 relative z-10",
+                    // Mobile-optimized icon sizing
+                    isMobile ? "h-6 w-6" : "h-5 w-5",
+                    isActive
+                      ? "text-white drop-shadow-sm transform scale-110"
+                      : "text-slate-500 group-hover:text-blue-600 group-hover:scale-110"
+                  )}
+                />
+                
+                {(!collapsed || isMobile) && (
+                  <span className={cn(
+                    "flex flex-1 items-center justify-between relative z-10",
+                    isMobile ? "ml-4" : "ml-3"
+                  )}>
+                    <span className={cn(
+                      "truncate font-medium",
+                      isMobile ? "text-base" : "text-sm"
+                    )}>{item.title}</span>
+                    {item.badge && (
+                      <motion.span
+                        animate={{ scale: [1, 1.05, 1] }}
+                        transition={{ duration: 2, repeat: Infinity }}
+                        className={cn(
+                          "ml-2 rounded-full bg-gradient-to-r from-pink-500 to-orange-500 font-bold text-white shadow-lg",
+                          isMobile ? "px-3 py-1.5 text-sm" : "px-2.5 py-1 text-xs"
+                        )}
+                      >
+                        {item.badge}
+                      </motion.span>
+                    )}
+                  </span>
+                )}
+                {/* Tooltip when collapsed */}
+                {collapsed && !isMobile && (
+                  <span
+                    className={cn(
+                      "pointer-events-none absolute left-full ml-2 whitespace-nowrap rounded-md bg-slate-900/95 px-2 py-1 text-xs font-medium text-white shadow-lg",
+                      "opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-150"
+                    )}
+                    role="tooltip"
+                  >
+                    {item.title}
+                  </span>
+                )}
+              </button>
+            </motion.div>
+      </motion.div>
     );
-  }, [pathname, collapsed, onClose, hoveredItem]);
+  }, [pathname, collapsed, hoveredItem, isMobile, isInitialLoad, handleItemClick, handleItemHover, handleItemLeave]);
 
   const navItems = React.useMemo(() => {
-    return filteredNavItems.map(item => (
-      <React.Fragment key={`${item.href}-${item.roles.join('-')}`}>
-        {renderNavItem(item)}
-      </React.Fragment>
-    ));
-  }, [filteredNavItems, renderNavItem]);
+    if (isInitialLoad) {
+      // Show skeletons during initial load - faster animations
+      return Array.from({ length: filteredNavItems.length }, (_, index) => (
+        <motion.div
+          key={`skeleton-${index}`}
+          initial={{ opacity: 0, x: -10 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.1, delay: index * 0.01 }} // Much faster
+          suppressHydrationWarning
+        >
+          <NavItemSkeleton isMobile={isMobile} collapsed={collapsed} />
+        </motion.div>
+      ));
+    }
+    
+    return filteredNavItems.map((item, index) => renderNavItem(item, index));
+  }, [filteredNavItems, renderNavItem, isInitialLoad, isMobile, collapsed]);
 
   return (
     <div
       className={cn(
-        "fixed left-0 top-0 z-50 flex h-screen flex-col backdrop-blur-xl bg-white/95 border-r border-slate-200/60 shadow-2xl transition-all duration-500 ease-out",
-        collapsed ? "w-16" : "w-64",
+        "fixed left-0 top-0 z-[60] flex h-screen flex-col bg-gradient-to-br from-white via-slate-50/80 to-blue-50/30 border-r border-slate-200/80 shadow-xl transition-all duration-300 ease-out",
+        // Mobile-first responsive design
+        isMobile 
+          ? "w-80" // Wider on mobile for better touch targets
+          : collapsed ? "w-16" : "w-64",
         className
       )}
+      role="navigation"
+      aria-label="Primary"
     >
-      {/* Modern gradient background */}
-      <div className="absolute inset-0 bg-gradient-to-br from-slate-50/80 via-white/90 to-blue-50/60 pointer-events-none" />
-      <div className="absolute inset-0 bg-gradient-to-t from-transparent via-transparent to-blue-500/5 pointer-events-none" />
-      
-      {/* Subtle animated mesh gradient */}
-      <div className="absolute inset-0 opacity-30 pointer-events-none">
-        <div className="absolute top-0 left-0 w-32 h-32 bg-gradient-to-br from-blue-400/20 to-transparent rounded-full blur-3xl animate-pulse" />
-        <div className="absolute bottom-0 right-0 w-24 h-24 bg-gradient-to-tl from-indigo-400/20 to-transparent rounded-full blur-2xl animate-pulse" style={{animationDelay: '1s'}} />
-      </div>
+      {/* Clean accent elements */}
+      <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 opacity-60"></div>
+      <div className="absolute inset-0 bg-gradient-to-b from-blue-500/[0.02] via-transparent to-transparent pointer-events-none"></div>
 
       {/* Modern Header */}
-      <div className="flex h-20 items-center justify-between border-b border-slate-200/40 px-4 bg-white/80 backdrop-blur-md relative z-10">
-        <ClientOnly>
-          {!collapsed && (
-            <div className="flex items-center gap-3 transition-all duration-500 ease-out">
-              <div className="relative group">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 shadow-xl shadow-blue-500/25 transition-all duration-300 group-hover:shadow-2xl group-hover:shadow-blue-500/40 group-hover:scale-105">
-                  <Zap className="h-6 w-6 text-white drop-shadow-sm" />
-                </div>
-                <div className="absolute -top-1 -right-1 h-4 w-4 bg-gradient-to-br from-green-400 to-emerald-500 rounded-full border-2 border-white shadow-lg animate-pulse" />
-                {/* Glow effect */}
-                <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-blue-600 to-purple-600 opacity-20 blur-xl scale-110 group-hover:opacity-30 transition-opacity duration-300" />
-              </div>
-              <div className="transition-all duration-300">
-                <h2 className="text-sm font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">Kardex</h2>
-              </div>
+      <div className={cn(
+        "flex items-center justify-between border-b border-slate-200/50 bg-white/90 relative z-10 shadow-sm",
+        // Mobile-optimized header height and padding
+        isMobile ? "h-16 px-6" : "h-20 px-4"
+      )}>
+        <div suppressHydrationWarning>
+          {(!collapsed || isMobile) && (
+            <div className="flex items-center justify-center w-full gap-3">
+              <Image 
+                src="/favicon-circle.svg" 
+                alt="Kardex Logo" 
+                width={isMobile ? 36 : 40} 
+                height={isMobile ? 36 : 40} 
+                className="rounded-lg transition-all duration-200 hover:scale-105" // Reduced duration
+                priority // Add priority for faster loading
+              />
+              <Image 
+                src="/kardex.png" 
+                alt="Kardex" 
+                width={isMobile ? 200 : 240} 
+                height={isMobile ? 62 : 75} 
+                className="transition-all duration-200 hover:scale-105" // Reduced duration
+                style={{ width: 'auto', height: 'auto' }}
+                priority // Add priority for faster loading
+              />
             </div>
           )}
-          {collapsed && (
+          {collapsed && !isMobile && (
             <div className="flex items-center justify-center w-full">
-              <div className="relative group">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 shadow-lg transition-all duration-300 group-hover:shadow-xl group-hover:scale-105">
-                  <Zap className="h-5 w-5 text-white" />
-                </div>
-                <div className="absolute -top-0.5 -right-0.5 h-3 w-3 bg-gradient-to-br from-green-400 to-emerald-500 rounded-full border border-white shadow-sm animate-pulse" />
-              </div>
+              <Image 
+                src="/favicon-circle.svg" 
+                alt="Kardex Logo" 
+                width={32} 
+                height={32} 
+                className="rounded-lg transition-all duration-200 hover:scale-105" // Reduced duration
+                priority // Add priority for faster loading
+              />
             </div>
           )}
-        </ClientOnly>
+        </div>
 
+        {/* Mobile close button or desktop collapse button */}
         <Button
           variant="ghost"
           size="icon"
-          className="h-9 w-9 text-slate-500 hover:text-slate-700 hover:bg-white/60 hover:shadow-md rounded-xl transition-all duration-300 hover:scale-105 active:scale-95 backdrop-blur-sm"
-          onClick={() => setCollapsed?.(!collapsed)}
+          className={cn(
+            "text-slate-500 hover:text-slate-700 hover:bg-white/80 hover:shadow-sm rounded-xl transition-all duration-200 hover:scale-105 active:scale-95 touch-manipulation focus:ring-2 focus:ring-blue-500/50 focus:ring-offset-2 focus:ring-offset-transparent",
+            isMobile ? "h-10 w-10" : "h-9 w-9"
+          )}
+          onClick={() => isMobile ? onClose?.() : setCollapsed?.(!collapsed)}
         >
-          {collapsed ? (
+          {isMobile ? (
+            <X className={cn("transition-transform duration-300", isMobile ? "h-5 w-5" : "h-4 w-4")} />
+          ) : collapsed ? (
             <ChevronRight className="h-4 w-4 transition-transform duration-300" />
           ) : (
             <ChevronLeft className="h-4 w-4 transition-transform duration-300" />
@@ -262,18 +389,61 @@ export function Sidebar({
       </div>
 
       {/* Navigation Section */}
-      <ScrollArea className="flex-1 py-6">
-        <ClientOnly>
-          {!collapsed && (
-            <nav className="space-y-1 px-4">
-              {navItems}
-            </nav>
+      <ScrollArea className={cn(
+        "flex-1",
+        isMobile ? "py-4" : "py-6"
+      )}>
+        <div suppressHydrationWarning>
+          {(!collapsed || isMobile) && (
+            <motion.nav 
+              initial={isInitialLoad ? { opacity: 0 } : false}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.1, delay: 0.02 }} // Much faster
+              className={cn(
+                "space-y-1",
+                isMobile ? "px-6" : "px-4"
+              )}
+            >
+              <AnimatePresence mode="wait">
+                {navItems}
+              </AnimatePresence>
+            </motion.nav>
           )}
-        </ClientOnly>
+        </div>
       </ScrollArea>
 
-      {/* Bottom spacing */}
-      <div className="h-4"></div>
-    </div>
-  );
-}
+        {/* Logout section */}
+        <div className={cn(
+          "border-t border-slate-200/60 bg-white/90 relative z-10 shadow-sm",
+          isMobile ? "px-6 py-4" : "px-4 py-3"
+        )}>
+          <button
+            onClick={() => logout?.()}
+            aria-label="Logout"
+            className={cn(
+              "group w-full flex items-center gap-3 rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:ring-offset-2 focus:ring-offset-transparent",
+              "hover:bg-red-50 hover:shadow-sm text-slate-700 hover:text-red-700",
+              isMobile ? "px-4 py-3 text-base" : "px-3 py-2 text-sm"
+            )}
+          >
+            <LogOut className={cn(isMobile ? "h-6 w-6" : "h-5 w-5", "text-slate-500 group-hover:text-red-600")} />
+            {(!collapsed || isMobile) && (
+              <span className="font-medium">Logout</span>
+            )}
+            {/* Tooltip when collapsed */}
+            {collapsed && !isMobile && (
+              <span
+                className={cn(
+                  "pointer-events-none absolute left-full ml-2 whitespace-nowrap rounded-md bg-slate-900/95 px-2 py-1 text-xs font-medium text-white shadow-lg",
+                  "opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-150"
+                )}
+                role="tooltip"
+              >
+                Logout
+              </span>
+            )}
+          </button>
+        </div>
+      </div>
+    );
+  }

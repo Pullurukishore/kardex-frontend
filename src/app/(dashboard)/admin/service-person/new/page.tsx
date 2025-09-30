@@ -115,17 +115,20 @@ export default function NewServicePersonPage() {
 
       const response = await apiClient.post('/service-persons', payload);
       
-      if (!response.success) {
-        throw new Error(response.error || 'Failed to create service person');
+      console.log('Service person creation response:', response);
+      
+      // Check if the response indicates success
+      if (response && (response.success !== false)) {
+        toast({
+          title: 'Success',
+          description: 'Service person created successfully',
+        });
+
+        // Show success screen, then redirect shortly after
+        setCreated(true);
+      } else {
+        throw new Error(response?.error || 'Failed to create service person');
       }
-
-      toast({
-        title: 'Success',
-        description: 'Service person created successfully',
-      });
-
-      // Show success screen, then redirect shortly after
-      setCreated(true);
     } catch (error: any) {
       console.error('Error creating service person:', error);
       toast({
@@ -142,11 +145,14 @@ export default function NewServicePersonPage() {
     if (created) {
       const timeoutId = setTimeout(() => {
         router.push('/admin/service-person');
-        router.refresh();
       }, 2000);
       return () => clearTimeout(timeoutId);
     }
   }, [created, router]);
+
+  const handleImmediateRedirect = () => {
+    router.push('/admin/service-person');
+  };
 
   if (created) {
     return (
@@ -161,16 +167,12 @@ export default function NewServicePersonPage() {
           </CardHeader>
           <CardContent>
             <div className="flex items-center justify-center gap-3">
-              <Link href="/admin/service-person">
-                <Button>
-                  Go to Service Persons
-                </Button>
-              </Link>
-              <Link href="/admin/service-person/new">
-                <Button variant="outline">
-                  Create Another
-                </Button>
-              </Link>
+              <Button onClick={handleImmediateRedirect}>
+                Go to Service Persons
+              </Button>
+              <Button variant="outline" onClick={() => window.location.reload()}>
+                Create Another
+              </Button>
             </div>
           </CardContent>
         </Card>

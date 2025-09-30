@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, memo, useMemo, useCallback } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '@/lib/api/axios';
@@ -12,28 +12,28 @@ import CustomerTable from './CustomerTable';
 interface CustomerClientProps {
   initialCustomers: Customer[];
   initialStats: any;
-  initialIndustries: string[];
   searchParams: {
     search?: string;
     status?: string;
-    industry?: string;
     page?: string;
   };
+  readOnly?: boolean;
 }
 
-export default function CustomerClient({
+const CustomerClient = memo(function CustomerClient({
   initialCustomers,
   initialStats,
-  initialIndustries,
-  searchParams
+  searchParams,
+  readOnly = false
 }: CustomerClientProps) {
   const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
   const [stats, setStats] = useState(initialStats);
-  const [industries, setIndustries] = useState<string[]>(initialIndustries);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const initialLoadComplete = useRef(false);
+  const lastSearchParams = useRef<string>('');
 
-  const fetchCustomerData = async () => {
+  const fetchCustomerData = useCallback(async () => {
     try {
       setIsRefreshing(true);
       setError(null);
@@ -41,7 +41,6 @@ export default function CustomerClient({
       const params = new URLSearchParams();
       if (searchParams.search) params.append('search', searchParams.search);
       if (searchParams.status && searchParams.status !== 'all') params.append('status', searchParams.status);
-      if (searchParams.industry && searchParams.industry !== 'all') params.append('industry', searchParams.industry);
       if (searchParams.page) params.append('page', searchParams.page);
       params.append('limit', '100');
 
@@ -60,10 +59,6 @@ export default function CustomerClient({
       };
       setStats(newStats);
       
-      // Get unique industries
-      const uniqueIndustries = Array.from(new Set(customerData.map((c: Customer) => c.industry).filter(Boolean))) as string[];
-      setIndustries(uniqueIndustries);
-      
       return true;
     } catch (err) {
       console.error('Failed to fetch customer data:', err);
@@ -73,16 +68,35 @@ export default function CustomerClient({
     } finally {
       setIsRefreshing(false);
     }
-  };
+  }, [searchParams]);
 
   useEffect(() => {
-    // Fetch fresh data when component mounts or search params change
-    fetchCustomerData();
-  }, [searchParams.search, searchParams.status, searchParams.industry, searchParams.page]);
+    // Create a string representation of current search params
+    const currentSearchParams = JSON.stringify(searchParams);
+    
+    // Only fetch data if search params have actually changed (not on initial mount)
+    if (initialLoadComplete.current && currentSearchParams !== lastSearchParams.current) {
+      console.log('CustomerClient - Search params changed, fetching new data');
+      fetchCustomerData();
+    } else if (!initialLoadComplete.current) {
+      // Mark initial load as complete without fetching (we already have server-side data)
+      console.log('CustomerClient - Initial load complete, using server-side data');
+      initialLoadComplete.current = true;
+    }
+    
+    // Update the last search params reference
+    lastSearchParams.current = currentSearchParams;
+  }, [searchParams.search, searchParams.status, searchParams.page]);
 
-  const handleRefresh = async () => {
+  const handleRefresh = useCallback(async () => {
     await fetchCustomerData();
-  };
+  }, [fetchCustomerData]);
+
+  // Memoize customer count to prevent unnecessary recalculations
+  const customerCount = useMemo(() => customers.length, [customers.length]);
+
+  // Memoize stats to prevent unnecessary recalculations
+  const memoizedStats = useMemo(() => stats, [stats]);
 
   if (error) {
     return (
@@ -109,6 +123,47 @@ export default function CustomerClient({
     );
   }
 
+  // Show loading skeleton only during actual data fetching (not initial load)
+  if (isRefreshing && initialLoadComplete.current) {
+    return (
+      <div className="space-y-6">
+        {/* Loading State */}
+        <div className="flex justify-end">
+          <div className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md bg-gray-200 text-gray-500">
+            <RefreshCw className="w-4 h-4 animate-spin" />
+            Refreshing...
+          </div>
+        </div>
+
+        {/* Stats Loading Skeleton */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="bg-white p-6 rounded-lg shadow-sm border animate-pulse">
+              <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
+              <div className="h-8 bg-gray-200 rounded w-1/2"></div>
+            </div>
+          ))}
+        </div>
+
+        {/* Table Loading Skeleton */}
+        <div className="bg-white rounded-lg shadow-sm border">
+          <div className="p-6 space-y-4">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="animate-pulse">
+                <div className="flex space-x-4">
+                  <div className="h-4 bg-gray-200 rounded w-1/4"></div>
+                  <div className="h-4 bg-gray-200 rounded w-1/4"></div>
+                  <div className="h-4 bg-gray-200 rounded w-1/4"></div>
+                  <div className="h-4 bg-gray-200 rounded w-1/4"></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Refresh Button */}
@@ -128,22 +183,25 @@ export default function CustomerClient({
       </div>
 
       {/* Stats Cards */}
-      <CustomerStats stats={stats} />
+      <CustomerStats stats={memoizedStats} />
 
       {/* Filters */}
       <CustomerFilters 
         search={searchParams.search}
         status={searchParams.status}
-        industry={searchParams.industry}
-        industries={industries}
-        totalResults={customers.length}
-        filteredResults={customers.length}
+        totalResults={customerCount}
+        filteredResults={customerCount}
       />
 
       {/* Customer Table */}
       <CustomerTable 
         customers={customers}
+        readOnly={readOnly}
       />
     </div>
   );
-}
+});
+
+CustomerClient.displayName = 'CustomerClient';
+
+export default CustomerClient;

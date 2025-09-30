@@ -1,9 +1,30 @@
 import axios, { AxiosError, AxiosInstance, AxiosRequestConfig } from 'axios';
+
+// Cookie helper function
+const getCookie = (name: string): string | null => {
+  if (typeof document === 'undefined') return null;
+  const value = `; ${document.cookie}`;
+  const parts = value.split(`; ${name}=`);
+  if (parts.length === 2) {
+    const cookieValue = parts.pop()?.split(';').shift();
+    return cookieValue || null;
+  }
+  return null;
+};
+
 // Token management helpers
 const getToken = (): string | null => {
   if (typeof window !== 'undefined') {
-    // Check both token keys for backward compatibility
-    return localStorage.getItem('accessToken') || localStorage.getItem('token');
+    // Check localStorage first for backward compatibility
+    const localStorageToken = localStorage.getItem('accessToken') || localStorage.getItem('token');
+    if (localStorageToken) {
+      return localStorageToken;
+    }
+    
+    // Fallback to cookies (same pattern as AuthContext)
+    const cookieToken = getCookie('accessToken') || getCookie('token') || 
+                       localStorage.getItem('cookie_accessToken');
+    return cookieToken;
   }
   return null;
 };

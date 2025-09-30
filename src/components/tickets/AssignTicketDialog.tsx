@@ -109,9 +109,10 @@ export function AssignTicketDialog({ open, onOpenChange, ticketId, onSuccess, zo
         
         // Fetch zone users if we're in the first step or if zoneId is provided
         if (currentStep === 'ZONE_USER' || zoneId) {
-          const zoneUsersRes = await api.get('/zone-users');
+          const zoneUsersRes = await api.get('/zone-users/zone-users');
           // Handle both array response and paginated response
           const usersData = zoneUsersRes.data.data || zoneUsersRes.data;
+          console.log('Zone users API response:', zoneUsersRes.data); // Debug log
           setZoneUsers(usersData
             .filter((user: any) => user.role === 'ZONE_USER')
             .map((user: any) => ({
@@ -205,11 +206,19 @@ export function AssignTicketDialog({ open, onOpenChange, ticketId, onSuccess, zo
     try {
       setLoading(true);
       
-      // Assign to zone user
-      const response = await api.patch(`/tickets/${ticketId}/assign-zone-user`, {
-        zoneUserId: zoneUserId,
+      console.log('Assigning ticket to zone user:', {
+        ticketId,
+        zoneUserId: parseInt(zoneUserId),
         note: 'Assigned to zone user'
       });
+      
+      // Assign to zone user
+      const response = await api.patch(`/tickets/${ticketId}/assign-zone-user`, {
+        zoneUserId: parseInt(zoneUserId),
+        note: 'Assigned to zone user'
+      });
+      
+      console.log('Zone user assignment response:', response.data);
       
       // Update status to ASSIGNED
       await api.patch(`/tickets/${ticketId}/status`, {

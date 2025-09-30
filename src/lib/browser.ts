@@ -137,3 +137,30 @@ export const isFeatureSupported = (feature: string, value?: string): boolean => 
     style[feature] = '';
   }
 };
+
+// Helper to preload routes for faster navigation
+export const preloadRoute = (href: string): void => {
+  if (!isBrowser) return;
+  
+  try {
+    const link = document.createElement('link');
+    link.rel = 'prefetch';
+    link.href = href;
+    document.head.appendChild(link);
+  } catch (e) {
+    console.error('Error preloading route:', e);
+  }
+};
+
+// Helper to detect if we're in a hydration phase
+export const isHydrating = (): boolean => {
+  if (!isBrowser) return false;
+  
+  try {
+    return document.readyState === 'loading' || 
+           !document.querySelector('[data-reactroot]') ||
+           window.location.pathname !== window.history.state?.url;
+  } catch (e) {
+    return false;
+  }
+};

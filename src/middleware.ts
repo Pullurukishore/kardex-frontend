@@ -69,13 +69,13 @@ export async function middleware(request: NextRequest) {
     return response;
   }
 
-  // Handle public routes
+  // Handle public routes - allow them to load without interference
   if (!shouldRedirectToLogin(pathname)) {
-    // Always allow auth pages to render. Do not auto-redirect away based on cookies alone.
-    if (pathname.startsWith('/auth/')) {
-      return NextResponse.next();
-    }
-    // For other public pages, proceed
+    return NextResponse.next();
+  }
+  
+  // Special handling for root path - let client-side routing handle it
+  if (pathname === '/') {
     return NextResponse.next();
   }
 
@@ -89,7 +89,12 @@ export async function middleware(request: NextRequest) {
   // Check if user has access to the requested route
   if (!isRouteAccessible(pathname, userRole)) {
     const redirectPath = getRoleBasedRedirect(userRole);
-    return NextResponse.redirect(new URL(redirectPath, request.url));
+    console.log(`Middleware: Redirecting ${userRole} from ${pathname} to ${redirectPath}`);
+    
+    // Add a small delay header to prevent conflicts with client-side redirects
+    const response = NextResponse.redirect(new URL(redirectPath, request.url));
+    response.headers.set('X-Redirect-Reason', 'role-access');
+    return response;
   }
 
   return NextResponse.next();

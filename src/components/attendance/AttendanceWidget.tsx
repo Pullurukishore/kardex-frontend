@@ -16,7 +16,8 @@ import {
   RotateCcw,
   AlertTriangle
 } from 'lucide-react';
-import api from '@/lib/api/axios';
+import { apiClient } from '@/lib/api/api-client';
+import LocationService, { GPSLocation, LocationResult } from '@/services/LocationService';
 
 interface AttendanceStatus {
   isCheckedIn: boolean;
@@ -46,9 +47,10 @@ export function AttendanceWidget({ onStatusChange }: AttendanceWidgetProps = {})
   const [stats, setStats] = useState<AttendanceStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
-  const [location, setLocation] = useState<{ lat: number; lng: number; address?: string } | null>(null);
+  const [location, setLocation] = useState<{ lat: number; lng: number; address?: string; accuracy?: number; accuracyLevel?: string; source?: string } | null>(null);
   const [locationLoading, setLocationLoading] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
+  const [accuracyWarning, setAccuracyWarning] = useState<string | null>(null);
   const [showEarlyCheckoutConfirm, setShowEarlyCheckoutConfirm] = useState(false);
   const [earlyCheckoutData, setEarlyCheckoutData] = useState<any>(null);
   const { toast } = useToast();
@@ -59,7 +61,7 @@ export function AttendanceWidget({ onStatusChange }: AttendanceWidgetProps = {})
     getCurrentLocation();
   }, []);
 
-  const getCurrentLocation = async () => {
+  const getCurrentLocation = async (requireAccuracy = false) => {
     if (!navigator.geolocation) {
       const errorMsg = "Geolocation is not supported by your browser.";
       setLocationError(errorMsg);
@@ -73,46 +75,85 @@ export function AttendanceWidget({ onStatusChange }: AttendanceWidgetProps = {})
 
     setLocationLoading(true);
     setLocationError(null);
+    setAccuracyWarning(null);
 
     try {
-      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, {
-          enableHighAccuracy: true,
-          timeout: 15000,
-          maximumAge: 60000 // Allow 1 minute old location
-        });
-      });
-
-      const lat = position.coords.latitude;
-      const lng = position.coords.longitude;
+      console.log('AttendanceWidget: Getting location with enhanced service...');
       
-      // Reverse geocode to get address
-      let address = 'Current Location';
-      try {
-        // You can use a geocoding service here
-        // For now, we'll use a placeholder
-        address = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
-      } catch (error) {
-        console.error('Geocoding failed:', error);
+      // Use enhanced LocationService with accuracy requirements for attendance
+      const locationResult: LocationResult = await LocationService.getLocationWithAddress({
+        enableHighAccuracy: true,
+        timeout: 30000,
+        maximumAge: 0,
+        retryAttempts: 3,
+        accuracyThreshold: requireAccuracy ? 50 : 200, // Stricter for attendance
+        requireAccuracy: false // Don't reject, but warn
+      });
+      
+      const { location: gpsLocation, address, source } = locationResult;
+      
+      console.log('AttendanceWidget: Location result:', {
+        accuracy: gpsLocation.accuracy,
+        accuracyLevel: gpsLocation.accuracyLevel,
+        isAccurate: gpsLocation.isAccurate,
+        source
+      });
+      
+      // Get accuracy feedback
+      const accuracyFeedback = LocationService.getAccuracyFeedback(gpsLocation.accuracy || 999999);
+      
+      // Set accuracy warning if needed
+      if (accuracyFeedback.severity === 'error' || accuracyFeedback.severity === 'warning') {
+        setAccuracyWarning(accuracyFeedback.message);
       }
-
-      const locationData = { lat, lng, address };
+      
+      const locationData = { 
+        lat: gpsLocation.latitude, 
+        lng: gpsLocation.longitude, 
+        address,
+        accuracy: gpsLocation.accuracy,
+        accuracyLevel: gpsLocation.accuracyLevel,
+        source
+      };
+      
       setLocation(locationData);
       setLocationError(null);
       
+      // Show appropriate toast based on accuracy and geocoding source
+      let toastTitle = "Location Detected";
+      let toastDescription = "Your location has been successfully detected.";
+      let toastVariant: "default" | "destructive" = "default";
+      
+      if (accuracyFeedback.severity === 'error') {
+        toastTitle = "Location Detected (Poor Accuracy)";
+        toastDescription = accuracyFeedback.message;
+        toastVariant = "destructive";
+      } else if (accuracyFeedback.severity === 'warning') {
+        toastTitle = "Location Detected (Fair Accuracy)";
+        toastDescription = accuracyFeedback.message;
+      } else {
+        if (source === 'frontend') {
+          toastDescription += " (Using backup geocoding service)";
+        } else if (source === 'coordinates') {
+          toastDescription += " (Address unavailable, showing coordinates)";
+        }
+      }
+      
       toast({
-        title: "Location Detected",
-        description: "Your location has been successfully detected.",
-        variant: "default"
+        title: toastTitle,
+        description: toastDescription,
+        variant: toastVariant
       });
       
       return locationData;
     } catch (error: any) {
-      console.error('Error getting location:', error);
+      console.error('AttendanceWidget: Location error:', error);
       
       let errorMessage = "Could not get your current location.";
       
-      if (error.code === 1) {
+      if (error.message?.includes('GPS accuracy too poor')) {
+        errorMessage = error.message;
+      } else if (error.code === 1) {
         errorMessage = "Location access denied. Please allow location permissions and try again.";
       } else if (error.code === 2) {
         errorMessage = "Location unavailable. Please check your GPS/network connection.";
@@ -136,7 +177,7 @@ export function AttendanceWidget({ onStatusChange }: AttendanceWidgetProps = {})
 
   const fetchAttendanceStatus = async () => {
     try {
-      const response = await api.get('/attendance/status');
+      const response = await apiClient.get('/attendance/status');
       setStatus(response.data);
     } catch (error) {
       console.error('Failed to fetch attendance status:', error);
@@ -145,7 +186,7 @@ export function AttendanceWidget({ onStatusChange }: AttendanceWidgetProps = {})
 
   const fetchAttendanceStats = async () => {
     try {
-      const response = await api.get('/attendance/stats', {
+      const response = await apiClient.get('/attendance/stats', {
         params: { period: 'week' }
       });
       setStats(response.data);
@@ -172,8 +213,8 @@ export function AttendanceWidget({ onStatusChange }: AttendanceWidgetProps = {})
     setActionLoading(true);
     
     try {
-      // Request location when checking in
-      const locationData = await getCurrentLocation();
+      // Request location with accuracy requirements for check-in
+      const locationData = await getCurrentLocation(true);
       
       if (!locationData?.lat || !locationData?.lng) {
         toast({
@@ -184,6 +225,20 @@ export function AttendanceWidget({ onStatusChange }: AttendanceWidgetProps = {})
         setActionLoading(false);
         return;
       }
+      
+      // Warn if accuracy is very poor for attendance
+      if (locationData.accuracy && locationData.accuracy > 100) {
+        const proceed = window.confirm(
+          `GPS accuracy is ±${Math.round(locationData.accuracy)}m, which may affect location precision. ` +
+          "For better accuracy, please move to an open area with clear sky view. \n\n" +
+          "Do you want to proceed with check-in anyway?"
+        );
+        
+        if (!proceed) {
+          setActionLoading(false);
+          return;
+        }
+      }
 
       const checkInData = {
         latitude: locationData.lat,
@@ -192,7 +247,7 @@ export function AttendanceWidget({ onStatusChange }: AttendanceWidgetProps = {})
         notes: 'Daily check-in'
       };
 
-      const response = await api.post('/attendance/checkin', checkInData);
+      const response = await apiClient.post('/attendance/checkin', checkInData);
       
       setStatus({
         isCheckedIn: true,
@@ -235,7 +290,7 @@ export function AttendanceWidget({ onStatusChange }: AttendanceWidgetProps = {})
         confirmEarlyCheckout: confirmEarly
       };
 
-      const response = await api.post('/attendance/checkout', checkOutData);
+      const response = await apiClient.post('/attendance/checkout', checkOutData);
 
       setStatus({
         isCheckedIn: false,
@@ -301,7 +356,7 @@ export function AttendanceWidget({ onStatusChange }: AttendanceWidgetProps = {})
         notes: 'Re-check-in after mistaken checkout'
       };
 
-      const response = await api.post('/attendance/re-checkin', reCheckInData);
+      const response = await apiClient.post('/attendance/re-checkin', reCheckInData);
 
       setStatus({
         isCheckedIn: true,
@@ -395,11 +450,13 @@ export function AttendanceWidget({ onStatusChange }: AttendanceWidgetProps = {})
         <div className="space-y-3">
           {/* Location Status Card */}
           <div className={`p-4 rounded-lg border-2 transition-all duration-300 ${
-            location 
+            location && !accuracyWarning
               ? 'bg-green-50 border-green-200 shadow-sm' 
-              : locationError 
-                ? 'bg-red-50 border-red-200 shadow-sm'
-                : 'bg-blue-50 border-blue-200 shadow-sm animate-pulse'
+              : location && accuracyWarning
+                ? 'bg-yellow-50 border-yellow-200 shadow-sm'
+                : locationError 
+                  ? 'bg-red-50 border-red-200 shadow-sm'
+                  : 'bg-blue-50 border-blue-200 shadow-sm animate-pulse'
           }`}>
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-3">
@@ -422,49 +479,62 @@ export function AttendanceWidget({ onStatusChange }: AttendanceWidgetProps = {})
                 
                 <div className="flex-1">
                   <p className={`font-semibold text-base ${
-                    location 
+                    location && !accuracyWarning
                       ? 'text-green-800' 
-                      : locationError 
-                        ? 'text-red-800'
-                        : 'text-blue-800'
+                      : location && accuracyWarning
+                        ? 'text-yellow-800'
+                        : locationError 
+                          ? 'text-red-800'
+                          : 'text-blue-800'
                   }`}>
                     {locationLoading 
                       ? 'Getting your location...' 
-                      : location 
-                        ? 'Location Ready ✓' 
-                        : locationError 
-                          ? 'Location Required'
-                          : 'Location Needed'
+                      : location && !accuracyWarning
+                        ? `Location Ready ✓ (${location.accuracyLevel})` 
+                        : location && accuracyWarning
+                          ? `Location Ready ⚠ (${location.accuracyLevel})`
+                          : locationError 
+                            ? 'Location Required'
+                            : 'Location Needed'
                     }
                   </p>
                   <p className={`text-sm mt-1 ${
-                    location 
+                    location && !accuracyWarning
                       ? 'text-green-700' 
-                      : locationError 
-                        ? 'text-red-700'
-                        : 'text-blue-700'
+                      : location && accuracyWarning
+                        ? 'text-yellow-700'
+                        : locationError 
+                          ? 'text-red-700'
+                          : 'text-blue-700'
                   }`}>
                     {locationLoading 
                       ? 'Please allow location access when prompted' 
                       : location 
-                        ? `📍 ${location.address}` 
+                        ? `📍 ${location.address}${location.accuracy ? ` (±${Math.round(location.accuracy)}m)` : ''}` 
                         : locationError 
                           ? locationError
                           : 'Location is required for attendance tracking'
                     }
                   </p>
+                  {accuracyWarning && (
+                    <p className="text-xs mt-2 text-yellow-600 bg-yellow-100 p-2 rounded">
+                      ⚠ {accuracyWarning}
+                    </p>
+                  )}
                 </div>
               </div>
               
               {/* Action Button */}
-              {(!location || locationError) && (
+              {(!location || locationError || accuracyWarning) && (
                 <Button 
-                  onClick={getCurrentLocation}
+                  onClick={() => getCurrentLocation(false)}
                   disabled={locationLoading}
                   className={`${
                     locationError 
                       ? 'bg-red-600 hover:bg-red-700 text-white' 
-                      : 'bg-blue-600 hover:bg-blue-700 text-white'
+                      : accuracyWarning
+                        ? 'bg-yellow-600 hover:bg-yellow-700 text-white'
+                        : 'bg-blue-600 hover:bg-blue-700 text-white'
                   } px-4 py-2 font-medium`}
                   size="sm"
                 >
@@ -476,7 +546,7 @@ export function AttendanceWidget({ onStatusChange }: AttendanceWidgetProps = {})
                   ) : (
                     <>
                       <MapPin className="h-4 w-4 mr-2" />
-                      {locationError ? 'Try Again' : 'Get Location'}
+                      {locationError ? 'Try Again' : accuracyWarning ? 'Improve Accuracy' : 'Get Location'}
                     </>
                   )}
                 </Button>
@@ -495,17 +565,37 @@ export function AttendanceWidget({ onStatusChange }: AttendanceWidgetProps = {})
           </div>
           
           {/* Location Help Text */}
-          {!location && !locationLoading && (
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+          {(!location || accuracyWarning) && !locationLoading && (
+            <div className={`border rounded-lg p-3 ${
+              accuracyWarning 
+                ? 'bg-yellow-50 border-yellow-200' 
+                : 'bg-amber-50 border-amber-200'
+            }`}>
               <div className="flex items-start space-x-2">
-                <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5" />
+                <AlertCircle className={`h-5 w-5 mt-0.5 ${
+                  accuracyWarning ? 'text-yellow-600' : 'text-amber-600'
+                }`} />
                 <div className="text-sm">
-                  <p className="font-medium text-amber-800 mb-1">Why do we need your location?</p>
-                  <ul className="text-amber-700 space-y-1 text-xs">
-                    <li>• Required for attendance check-in/check-out</li>
-                    <li>• Helps track work locations and activities</li>
-                    <li>• Ensures accurate time and location logging</li>
-                  </ul>
+                  {accuracyWarning ? (
+                    <>
+                      <p className="font-medium text-yellow-800 mb-1">Improve GPS Accuracy</p>
+                      <ul className="text-yellow-700 space-y-1 text-xs">
+                        <li>• Move to an open area with clear sky view</li>
+                        <li>• Avoid being near tall buildings or indoors</li>
+                        <li>• Wait a moment for GPS to stabilize</li>
+                        <li>• Ensure location services are enabled</li>
+                      </ul>
+                    </>
+                  ) : (
+                    <>
+                      <p className="font-medium text-amber-800 mb-1">Why do we need your location?</p>
+                      <ul className="text-amber-700 space-y-1 text-xs">
+                        <li>• Required for attendance check-in/check-out</li>
+                        <li>• Helps track work locations and activities</li>
+                        <li>• Ensures accurate time and location logging</li>
+                      </ul>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -563,7 +653,9 @@ export function AttendanceWidget({ onStatusChange }: AttendanceWidgetProps = {})
                 className={`flex-1 ${
                   !location 
                     ? 'bg-gray-400 cursor-not-allowed' 
-                    : 'bg-green-600 hover:bg-green-700'
+                    : accuracyWarning
+                      ? 'bg-yellow-600 hover:bg-yellow-700'
+                      : 'bg-green-600 hover:bg-green-700'
                 }`}
               >
                 {actionLoading ? (
@@ -571,7 +663,7 @@ export function AttendanceWidget({ onStatusChange }: AttendanceWidgetProps = {})
                 ) : (
                   <LogIn className="h-4 w-4 mr-2" />
                 )}
-                {!location ? 'Location Required' : 'Check In'}
+                {!location ? 'Location Required' : accuracyWarning ? 'Check In (Poor GPS)' : 'Check In'}
               </Button>
               
               {/* Re-check-in button for same day checkout */}

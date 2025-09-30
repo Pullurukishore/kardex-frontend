@@ -1,5 +1,8 @@
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
+
+// Force dynamic rendering for dashboard layout
+export const dynamic = 'force-dynamic';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { getCurrentUser } from '@/lib/api/auth';

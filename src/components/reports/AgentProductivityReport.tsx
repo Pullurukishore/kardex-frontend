@@ -12,17 +12,17 @@ interface AgentProductivityReportProps {
 export function AgentProductivityReport({ reportData }: AgentProductivityReportProps) {
   return (
     <div className="space-y-6">
-      {/* Agent Performance */}
+      {/* Service Personnel Performance */}
       {reportData?.agents && (
         <Card>
           <CardHeader>
-            <CardTitle>Agent Performance Metrics</CardTitle>
+            <CardTitle>Service Personnel Performance Metrics</CardTitle>
           </CardHeader>
           <CardContent>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Agent</TableHead>
+                  <TableHead>Service Person / Zone User</TableHead>
                   <TableHead>Total Tickets</TableHead>
                   <TableHead>Resolved</TableHead>
                   <TableHead>Resolution Rate</TableHead>

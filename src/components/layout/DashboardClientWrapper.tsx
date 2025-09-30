@@ -16,87 +16,119 @@ interface DashboardClientWrapperProps {
 export function DashboardClientWrapper({ children, userRole }: DashboardClientWrapperProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
   const [pageKey, setPageKey] = useState(0);
+  const [isMobile, setIsMobile] = useState(false);
   const pathname = usePathname();
+  
+  // Service persons don't need sidebar - single dashboard approach
+  const showSidebar = userRole !== 'SERVICE_PERSON';
+
+  // Detect mobile screen size
+  useEffect(() => {
+    const checkMobile = () => {
+      const mobile = window.innerWidth < 1024; // lg breakpoint
+      setIsMobile(mobile);
+      // Auto-collapse sidebar on desktop, but keep it as overlay on mobile
+      if (!mobile && window.innerWidth < 1280) { // xl breakpoint
+        setIsCollapsed(true);
+      }
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // Close mobile sidebar on route change and handle page transitions
   useEffect(() => {
     setSidebarOpen(false);
-    setIsLoading(true);
     setPageKey(prev => prev + 1);
-    
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 0);
-    
-    return () => clearTimeout(timer);
   }, [pathname]);
 
-  // Initial loading
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 0);
-    
-    return () => clearTimeout(timer);
-  }, []);
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
+  // Removed loading states to prevent delays
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Mobile overlay */}
-      <AnimatePresence>
-        {sidebarOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden"
-            onClick={() => setSidebarOpen(false)}
-          />
-        )}
-      </AnimatePresence>
+      {/* Mobile overlay - only show if sidebar is enabled */}
+      {showSidebar && (
+        <AnimatePresence>
+          {sidebarOpen && isMobile && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.3 }}
+              className="fixed inset-0 z-[55] bg-black/60 backdrop-blur-sm"
+              onClick={() => setSidebarOpen(false)}
+            />
+          )}
+        </AnimatePresence>
+      )}
 
-      {/* Sidebar */}
-      <div className={cn(
-        "lg:block",
-        sidebarOpen ? "block" : "hidden lg:block"
-      )}>
-        <Sidebar 
-          userRole={userRole}
-          collapsed={isCollapsed}
-          setCollapsed={setIsCollapsed}
-          onClose={() => setSidebarOpen(false)}
-        />
-      </div>
+      {/* Sidebar - only show if sidebar is enabled */}
+      {showSidebar && (
+        <AnimatePresence>
+          {(sidebarOpen || !isMobile) && (
+            <motion.div
+              initial={isMobile ? { x: -320 } : undefined}
+              animate={isMobile ? { x: 0 } : undefined}
+              exit={isMobile ? { x: -320 } : undefined}
+              transition={{ duration: 0.3, ease: "easeInOut" }}
+              className={cn(
+                isMobile ? "fixed z-[60]" : "lg:block",
+                !isMobile && !sidebarOpen ? "hidden lg:block" : "block"
+              )}
+            >
+              <Sidebar 
+                userRole={userRole}
+                collapsed={!isMobile && isCollapsed}
+                setCollapsed={setIsCollapsed}
+                onClose={() => setSidebarOpen(false)}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      )}
       
       {/* Main content */}
       <div 
         className={cn(
           "flex flex-col min-h-screen transition-all duration-500 ease-out",
-          isCollapsed ? "lg:ml-16" : "lg:ml-64" // Responsive margins based on sidebar state
+          // Conditional margins based on sidebar visibility and user role
+          !showSidebar 
+            ? "ml-0" // No sidebar for service persons
+            : isMobile 
+              ? "ml-0" // No margin on mobile (overlay sidebar)
+              : isCollapsed 
+                ? "lg:ml-16" 
+                : "lg:ml-64"
         )}
       >
-        <Header onMenuClick={() => setSidebarOpen(true)} />
+        <Header 
+          onMenuClick={() => setSidebarOpen(true)} 
+          isMobile={isMobile}
+          sidebarOpen={sidebarOpen}
+          showSidebar={showSidebar}
+        />
         
         <main className="flex-1 overflow-y-auto focus:outline-none bg-gray-50">
-          <div className="py-6 px-4 sm:px-6 lg:px-8 min-h-full">
+          <div className={cn(
+            "min-h-full",
+            // Mobile-optimized padding
+            isMobile 
+              ? "py-4 px-4" 
+              : "py-6 px-4 sm:px-6 lg:px-8"
+          )}>
             <AnimatePresence mode="wait">
               <motion.div
                 key={pageKey}
-                initial={{ opacity: 0, y: 10 }}
+                initial={{ opacity: 0, y: 5 }} // Reduced movement
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.2 }}
+                exit={{ opacity: 0, y: -5 }}
+                transition={{ 
+                  duration: 0.1, // Much faster
+                  ease: "easeOut"
+                }}
               >
                 {children}
               </motion.div>

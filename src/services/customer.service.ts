@@ -21,7 +21,12 @@ export const fetchCustomers = async (params: {
 };
 
 export const fetchCustomer = async (id: number): Promise<Customer> => {
-  const response = await api.get(`/customers/${id}`);
+  const response = await api.get(`/customers/${id}`, {
+    params: {
+      includeAssets: true,
+      assetsLimit: 1000, // Request a high limit to get all assets
+    }
+  });
   return response.data;
 };
 

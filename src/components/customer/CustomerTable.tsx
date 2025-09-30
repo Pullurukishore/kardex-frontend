@@ -1,3 +1,4 @@
+import React, { memo, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -7,7 +8,7 @@ import {
   Phone, 
   Mail, 
   Eye, 
-  Edit, 
+  Pencil, 
   Trash2, 
   Users,
   AlertCircle,
@@ -21,18 +22,132 @@ import Link from 'next/link';
 
 interface CustomerTableProps {
   customers: Customer[];
+  readOnly?: boolean;
 }
 
-export default function CustomerTable({ customers }: CustomerTableProps) {
-  const formatDate = (dateString: string) => {
-    try {
-      return format(new Date(dateString), 'PPp');
-    } catch (e) {
-      return 'N/A';
-    }
-  };
+// Memoized customer row component for better performance
+const CustomerRow = memo(({ customer, readOnly, basePath }: { customer: Customer; readOnly?: boolean; basePath: string }) => {
+  const primaryContact = useMemo(() => {
+    return customer.contacts && customer.contacts.length > 0 ? customer.contacts[0] : null;
+  }, [customer.contacts]);
 
-  if (!customers.length) {
+  const companyInitial = useMemo(() => {
+    return customer.companyName.charAt(0).toUpperCase();
+  }, [customer.companyName]);
+
+  return (
+    <tr className="hover:bg-blue-50/30 transition-colors duration-150">
+      <td className="py-3 px-4">
+        <div className="flex items-start gap-3">
+          <div className="h-10 w-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-medium text-sm flex-shrink-0">
+            {companyInitial}
+          </div>
+          <div className="min-w-0 flex-1">
+            <Link 
+              href={`${basePath}/customers/${customer.id}`}
+              className="font-medium text-gray-900 hover:text-blue-600 transition-colors block break-words leading-tight"
+              style={{ wordBreak: 'break-word', hyphens: 'auto' }}
+            >
+              {customer.companyName}
+            </Link>
+            {customer.serviceZone?.name && (
+              <div className="text-xs text-gray-500 flex items-center mt-1">
+                <MapPin className="h-3 w-3 mr-1 flex-shrink-0" />
+                <span className="break-words">{customer.serviceZone.name}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      </td>
+      <td className="py-3 px-4">
+        <div className="flex items-start text-sm text-gray-500 min-w-0">
+          <MapPin className="h-3 w-3 mr-1 flex-shrink-0 mt-0.5" />
+          <span className="break-words leading-tight">{customer.address || 'No address'}</span>
+        </div>
+      </td>
+      <td className="py-3 px-4">
+        <div className="min-w-0">
+          {primaryContact ? (
+            <div className="space-y-1">
+              {primaryContact.name && (
+                <div className="font-medium text-gray-900 text-sm break-words leading-tight">{primaryContact.name}</div>
+              )}
+              {primaryContact.email && (
+                <div className="flex items-start text-xs text-gray-500 min-w-0">
+                  <Mail className="h-3 w-3 mr-1 flex-shrink-0 mt-0.5" />
+                  <a 
+                    href={`mailto:${primaryContact.email}`} 
+                    className="hover:underline break-all hover:text-blue-600 leading-tight"
+                  >
+                    {primaryContact.email}
+                  </a>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="text-xs text-gray-400 flex items-center">
+              <Users className="h-3 w-3 mr-1 flex-shrink-0" />
+              <span className="break-words">
+                {customer._count?.contacts ? `${customer._count.contacts} contacts` : 'No contacts'}
+              </span>
+            </div>
+          )}
+        </div>
+      </td>
+      <td className="py-3 px-4 text-center">
+        <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-purple-100 text-purple-800">
+          {customer._count?.assets || 0}
+        </span>
+      </td>
+      <td className="py-3 px-4 text-center">
+        <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-orange-100 text-orange-800">
+          {customer._count?.tickets || 0}
+        </span>
+      </td>
+      <td className="py-3 px-4 text-center">
+        <span 
+          className={cn(
+            'inline-flex items-center px-2 py-1 rounded text-xs font-medium',
+            customer.isActive 
+              ? 'bg-green-100 text-green-800' 
+              : 'bg-gray-100 text-gray-800'
+          )}
+        >
+          {customer.isActive ? 'Active' : 'Inactive'}
+        </span>
+      </td>
+      <td className="py-3 px-4 text-right">
+        <div className="flex items-center justify-end gap-1">
+          <Link 
+            href={`${basePath}/customers/${customer.id}`}
+            className="inline-flex items-center justify-center h-8 w-8 rounded hover:bg-blue-50 transition-colors"
+          >
+            <Eye className="h-4 w-4 text-gray-600" />
+          </Link>
+          {!readOnly && (
+            <Link 
+              href={`/admin/customers/${customer.id}/edit`}
+              className="inline-flex items-center justify-center h-8 w-8 rounded hover:bg-green-50 transition-colors"
+            >
+              <Pencil className="h-4 w-4 text-gray-600" />
+            </Link>
+          )}
+        </div>
+      </td>
+    </tr>
+  );
+});
+
+CustomerRow.displayName = 'CustomerRow';
+
+const CustomerTable = memo(function CustomerTable({ customers, readOnly = false }: CustomerTableProps) {
+  // Memoize the customer count to prevent unnecessary recalculations
+  const customerCount = useMemo(() => customers.length, [customers.length]);
+  
+  // Determine base path based on readOnly mode
+  const basePath = readOnly ? '/zone' : '/admin';
+
+  if (!customerCount) {
     return (
       <Card className="shadow-lg">
         <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-t-lg">
@@ -53,12 +168,14 @@ export default function CustomerTable({ customers }: CustomerTableProps) {
             <p className="text-gray-500 mb-6">
               Get started by adding your first customer.
             </p>
-            <Link href="/admin/customers/new">
-              <Button className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg">
-                <Plus className="mr-2 h-4 w-4" />
-                Add Customer
-              </Button>
-            </Link>
+            {!readOnly && (
+              <Link href="/admin/customers/new">
+                <Button className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Customer
+                </Button>
+              </Link>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -70,7 +187,7 @@ export default function CustomerTable({ customers }: CustomerTableProps) {
       <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-t-lg">
         <CardTitle className="text-gray-800 flex items-center gap-2">
           <Building2 className="h-5 w-5 text-blue-600" />
-          Customers ({customers.length})
+          Customers ({customerCount})
         </CardTitle>
         <CardDescription>
           Manage customer relationships and business data
@@ -78,156 +195,21 @@ export default function CustomerTable({ customers }: CustomerTableProps) {
       </CardHeader>
       <CardContent className="p-0">
         <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50">
+          <table className="w-full table-fixed">
+            <thead className="bg-gray-50/80">
               <tr>
-                <th className="text-left py-4 px-6 font-semibold text-gray-700 min-w-[200px]">Company</th>
-                <th className="text-left py-4 px-6 font-semibold text-gray-700">Industry & Location</th>
-                <th className="text-left py-4 px-6 font-semibold text-gray-700">Contact</th>
-                <th className="text-center py-4 px-6 font-semibold text-gray-700">Assets</th>
-                <th className="text-center py-4 px-6 font-semibold text-gray-700">Tickets</th>
-                <th className="text-center py-4 px-6 font-semibold text-gray-700">Status</th>
-                <th className="text-right py-4 px-6 font-semibold text-gray-700">Actions</th>
+                <th className="text-left py-3 px-4 font-medium text-gray-700 text-sm w-1/4">Company</th>
+                <th className="text-left py-3 px-4 font-medium text-gray-700 text-sm w-1/5">Location</th>
+                <th className="text-left py-3 px-4 font-medium text-gray-700 text-sm w-1/5">Contact</th>
+                <th className="text-center py-3 px-4 font-medium text-gray-700 text-sm w-16">Assets</th>
+                <th className="text-center py-3 px-4 font-medium text-gray-700 text-sm w-16">Tickets</th>
+                <th className="text-center py-3 px-4 font-medium text-gray-700 text-sm w-20">Status</th>
+                <th className="text-right py-3 px-4 font-medium text-gray-700 text-sm w-20">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {customers.map((customer) => (
-                <tr key={customer.id} className="hover:bg-gradient-to-r hover:from-blue-50/50 hover:to-indigo-50/50 transition-all duration-200">
-                  <td className="py-4 px-6">
-                    <div className="flex items-center gap-3">
-                      <div className="h-12 w-12 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-semibold">
-                        {customer.companyName.charAt(0).toUpperCase()}
-                      </div>
-                      <div>
-                        <Link 
-                          href={`/admin/customers/${customer.id}`}
-                          className="font-semibold text-gray-900 hover:text-blue-600 transition-colors"
-                        >
-                          {customer.companyName}
-                        </Link>
-                        {customer.serviceZone?.name && (
-                          <div className="text-sm text-gray-500 flex items-center mt-1">
-                            <MapPin className="h-3 w-3 mr-1" />
-                            {customer.serviceZone.name}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="py-4 px-6">
-                    <div className="space-y-1">
-                      {customer.industry ? (
-                        <Badge variant="secondary" className="bg-indigo-100 text-indigo-700 hover:bg-indigo-200">
-                          {customer.industry}
-                        </Badge>
-                      ) : (
-                        <span className="text-sm text-gray-400">No industry</span>
-                      )}
-                      <div className="flex items-center text-sm text-gray-500">
-                        <MapPin className="h-4 w-4 mr-1" />
-                        {customer.address || 'No address'}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="py-4 px-6">
-                    <div className="space-y-1">
-                      {customer.contacts && customer.contacts.length > 0 ? (
-                        <>
-                          {customer.contacts[0]?.name && (
-                            <div className="font-medium text-gray-900">{customer.contacts[0].name}</div>
-                          )}
-                          {customer.contacts[0]?.email && (
-                            <div className="flex items-center text-sm text-gray-500">
-                              <Mail className="h-3.5 w-3.5 mr-1 flex-shrink-0" />
-                              <a 
-                                href={`mailto:${customer.contacts[0].email}`} 
-                                className="hover:underline truncate hover:text-blue-600"
-                              >
-                                {customer.contacts[0].email}
-                              </a>
-                            </div>
-                          )}
-                          {customer.contacts[0]?.phone && (
-                            <div className="flex items-center text-sm text-gray-500">
-                              <Phone className="h-3.5 w-3.5 mr-1 flex-shrink-0" />
-                              <a 
-                                href={`tel:${customer.contacts[0].phone}`}
-                                className="hover:underline hover:text-blue-600"
-                              >
-                                {customer.contacts[0].phone}
-                              </a>
-                            </div>
-                          )}
-                        </>
-                      ) : (
-                        <div className="text-sm text-gray-400 flex items-center">
-                          <Users className="h-3.5 w-3.5 mr-1" />
-                          {customer._count?.contacts ? `${customer._count.contacts} contacts` : 'No contacts'}
-                        </div>
-                      )}
-                    </div>
-                  </td>
-                  <td className="py-4 px-6 text-center">
-                    <Badge 
-                      variant="outline" 
-                      className="bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100"
-                    >
-                      {customer._count?.assets || 0}
-                    </Badge>
-                  </td>
-                  <td className="py-4 px-6 text-center">
-                    <Badge 
-                      variant="outline" 
-                      className="bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100"
-                    >
-                      {customer._count?.tickets || 0}
-                    </Badge>
-                  </td>
-                  <td className="py-4 px-6 text-center">
-                    <Badge 
-                      className={cn(
-                        'capitalize font-medium',
-                        customer.isActive 
-                          ? 'bg-green-100 text-green-800 border-green-200 hover:bg-green-200' 
-                          : 'bg-gray-100 text-gray-800 border-gray-200 hover:bg-gray-200'
-                      )}
-                      variant="outline"
-                    >
-                      {customer.isActive ? 'Active' : 'Inactive'}
-                    </Badge>
-                  </td>
-                  <td className="py-4 px-6 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <Link href={`/admin/customers/${customer.id}`}>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="hover:bg-blue-50"
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                      </Link>
-                      <Link href={`/admin/customers/${customer.id}/edit`}>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="hover:bg-green-50"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                      </Link>
-                      <Link href={`/admin/customers/${customer.id}/delete`}>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="hover:bg-red-50 text-red-600"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </Link>
-                    </div>
-                  </td>
-                </tr>
+                <CustomerRow key={customer.id} customer={customer} readOnly={readOnly} basePath={basePath} />
               ))}
             </tbody>
           </table>
@@ -235,4 +217,8 @@ export default function CustomerTable({ customers }: CustomerTableProps) {
       </CardContent>
     </Card>
   );
-}
+});
+
+CustomerTable.displayName = 'CustomerTable';
+
+export default CustomerTable;

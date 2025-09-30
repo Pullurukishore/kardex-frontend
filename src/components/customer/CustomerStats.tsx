@@ -1,3 +1,4 @@
+import React, { memo } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Building2, Activity, Users, TrendingUp, AlertCircle } from 'lucide-react';
 
@@ -11,7 +12,7 @@ interface CustomerStatsProps {
   };
 }
 
-export default function CustomerStats({ stats }: CustomerStatsProps) {
+export default memo(function CustomerStats({ stats }: CustomerStatsProps) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
       <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
@@ -85,4 +86,4 @@ export default function CustomerStats({ stats }: CustomerStatsProps) {
       </Card>
     </div>
   );
-}
+});

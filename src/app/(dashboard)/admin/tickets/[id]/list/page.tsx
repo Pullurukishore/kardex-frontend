@@ -257,17 +257,13 @@ export default function TicketDetailPage() {
                     <h3 className="font-medium mb-2">Asset Details</h3>
                     <div className="space-y-2">
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Machine ID:</span>
-                        <span>{ticket.asset.machineId}</span>
-                      </div>
-                      <div className="flex justify-between">
                         <span className="text-muted-foreground">Model:</span>
                         <span>{ticket.asset.model}</span>
                       </div>
-                      {ticket.asset.serialNumber && (
+                      {(ticket.asset as any).serialNo && (
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Serial Number:</span>
-                          <span>{ticket.asset.serialNumber}</span>
+                          <span>{(ticket.asset as any).serialNo}</span>
                         </div>
                       )}
                     </div>

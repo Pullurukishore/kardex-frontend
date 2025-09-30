@@ -1,13 +1,12 @@
 import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
-import { getCustomers, getCustomerStats, getUniqueIndustries } from '@/lib/server/customer';
+import { getCustomers, getCustomerStats } from '@/lib/server/customer';
 import CustomerClient from '@/components/customer/CustomerClient';
 import Link from 'next/link';
 
 interface SearchParams {
   search?: string;
   status?: string;
-  industry?: string;
   page?: string;
 }
 
@@ -18,14 +17,12 @@ export default async function CustomersPage({
 }) {
   const search = searchParams.search || '';
   const status = searchParams.status || 'all';
-  const industry = searchParams.industry || 'all';
   const page = parseInt(searchParams.page || '1');
 
   try {
     // Fetch data server-side
-    const allCustomers = await getCustomers({ search, status, industry, page, limit: 100 });
+    const allCustomers = await getCustomers({ search, status, page, limit: 100 });
     const stats = await getCustomerStats(allCustomers);
-    const industries = await getUniqueIndustries(allCustomers);
 
     return (
       <div className="space-y-6">
@@ -53,7 +50,6 @@ export default async function CustomersPage({
         <CustomerClient 
           initialCustomers={allCustomers}
           initialStats={stats}
-          initialIndustries={industries}
           searchParams={searchParams}
         />
       </div>

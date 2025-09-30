@@ -8,6 +8,7 @@ import { AgentProductivityReport } from './AgentProductivityReport';
 import { IndustrialDataReport } from './IndustrialDataReport';
 import { ExecutiveSummaryReport } from './ExecutiveSummaryReport';
 import { ServicePersonAttendanceReport } from './ServicePersonAttendanceReport';
+import { HERAnalysisReport } from './HERAnalysisReport';
 
 interface ReportRendererProps {
   reportType: string;
@@ -30,6 +31,10 @@ export function ReportRenderer({ reportType, reportData }: ReportRendererProps) 
       return <ExecutiveSummaryReport reportData={reportData} />;
     case 'service-person-attendance':
       return <ServicePersonAttendanceReport reportData={reportData} />;
+    case 'service-person-reports':
+      return <ServicePersonAttendanceReport reportData={reportData} />;
+    case 'her-analysis':
+      return <HERAnalysisReport reportData={reportData} />;
     default:
       return null;
   }

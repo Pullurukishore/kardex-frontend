@@ -31,14 +31,14 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
     assetId: searchParams.assetId,
   };
 
-  // Fetch all required data server-side - no auto-generation
+  // Fetch all required data server-side
   const [zones, customers, assets] = await Promise.all([
     getZones(),
     filters.reportType === 'industrial-data' ? getCustomers() : Promise.resolve([]),
     filters.customerId ? getAssets(filters.customerId) : Promise.resolve([])
   ]);
   
-  // Start with no report data - manual generation only
+  // Don't auto-generate - let client handle it with proper logic for all report types
   const reportData = null;
 
   return (

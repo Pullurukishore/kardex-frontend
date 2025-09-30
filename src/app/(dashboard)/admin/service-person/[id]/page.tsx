@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Edit, Trash2, Mail, Shield, MapPin } from 'lucide-react';
+import { ArrowLeft, Pencil, Trash2, Mail, Shield, MapPin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -117,7 +117,7 @@ export default function ServicePersonDetailPage() {
         <div className="flex items-center gap-2">
           <Link href={`/admin/service-person/${servicePersonId}/edit`}>
             <Button variant="outline">
-              <Edit className="mr-2 h-4 w-4" />
+              <Pencil className="mr-2 h-4 w-4" />
               Edit
             </Button>
           </Link>
@@ -252,7 +252,7 @@ export default function ServicePersonDetailPage() {
             <CardContent className="space-y-3">
               <Link href={`/admin/service-person/${servicePersonId}/edit`} className="block">
                 <Button variant="outline" className="w-full justify-start">
-                  <Edit className="mr-2 h-4 w-4" />
+                  <Pencil className="mr-2 h-4 w-4" />
                   Edit Details
                 </Button>
               </Link>

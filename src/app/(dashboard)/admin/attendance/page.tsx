@@ -16,34 +16,28 @@ import {
   User,
   Calendar,
   Filter,
-  Download,
   RefreshCw,
   Search,
   Eye,
-  Edit,
+  Pencil,
   AlertTriangle,
   CheckCircle,
   XCircle,
   Timer,
-  ExternalLink,
-  Plus,
-  FileText,
-  Loader2,
   BarChart3,
   TrendingUp,
   Users,
   Activity,
-  Trash2,
   Map,
   Info,
-  Clock3,
   UserCheck,
   UserX,
   Zap
 } from 'lucide-react';
 import { apiClient } from '@/lib/api/api-client';
-import { format, parseISO, startOfDay, endOfDay, subDays, isToday, isYesterday } from 'date-fns';
+import { format, parseISO, startOfDay, endOfDay, isToday, isYesterday } from 'date-fns';
 import Link from 'next/link';
+import { memo, useMemo, useCallback } from 'react';
 
 // Types based on backend schema
 interface AttendanceRecord {
@@ -127,13 +121,13 @@ const STATUS_CONFIG = {
 const FLAG_CONFIG = {
   LATE_CHECKIN: { label: 'Late Check-in', color: 'bg-yellow-100 text-yellow-800', icon: Clock },
   EARLY_CHECKOUT: { label: 'Early Checkout', color: 'bg-orange-100 text-orange-800', icon: Timer },
-  LONG_BREAK: { label: 'Long Break', color: 'bg-purple-100 text-purple-800', icon: Clock3 },
+  LONG_BREAK: { label: 'Long Break', color: 'bg-purple-100 text-purple-800', icon: Clock },
   NO_CHECKOUT: { label: 'No Checkout', color: 'bg-red-100 text-red-800', icon: XCircle },
   SUSPICIOUS_LOCATION: { label: 'Location Issue', color: 'bg-red-100 text-red-800', icon: MapPin },
   LOW_ACTIVITY: { label: 'Low Activity', color: 'bg-gray-100 text-gray-800', icon: Activity },
 };
 
-export default function AdminAttendancePage() {
+const AdminAttendancePage = memo(function AdminAttendancePage() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
@@ -166,7 +160,7 @@ export default function AdminAttendancePage() {
       };
     }
     if (dateRange === 'yesterday') {
-      const y = subDays(now, 1);
+      const y = new Date(now.getTime() - 24 * 60 * 60 * 1000);
       return {
         startDate: startOfDay(y).toISOString(),
         endDate: endOfDay(y).toISOString(),
@@ -187,8 +181,18 @@ export default function AdminAttendancePage() {
     };
   };
 
+  // Memoize processed records for better performance
+  const processedRecords = useMemo(() => {
+    return attendanceRecords.map(record => ({
+      ...record,
+      statusConfig: STATUS_CONFIG[record.status] || STATUS_CONFIG.CHECKED_OUT,
+      isAutoCheckout: record.notes?.includes('Auto-checkout'),
+      formattedHours: record.totalHours ? `${Number(record.totalHours).toFixed(1)}h` : 'Calculating...'
+    }));
+  }, [attendanceRecords]);
+
   // Fetch attendance data
-  const fetchAttendanceData = async (refresh = false) => {
+  const fetchAttendanceData = useCallback(async (refresh = false) => {
     try {
       if (refresh) setIsRefreshing(true);
       else setLoading(true);
@@ -207,8 +211,7 @@ export default function AdminAttendancePage() {
       if (selectedZone !== 'all') params.zoneId = selectedZone;
       if (searchQuery.trim()) params.search = searchQuery.trim();
 
-      console.log('🔍 Making API calls with params:', params);
-      console.log('📅 Date range:', { startDate, endDate });
+      // Optimized: Reduced console logging for better performance
 
       // Fetch attendance records, stats, service persons, and zones in parallel
       const [attendanceResponse, statsResponse, servicePersonsResponse, serviceZonesResponse] = await Promise.allSettled([
@@ -218,51 +221,34 @@ export default function AdminAttendancePage() {
         apiClient.get('/admin/attendance/service-zones')
       ]);
 
-      console.log('📡 API responses received:', {
-        attendance: attendanceResponse.status,
-        stats: statsResponse.status,
-        servicePersons: servicePersonsResponse.status,
-        serviceZones: serviceZonesResponse.status
-      });
+      // API responses received
 
       // Process attendance records
       if (attendanceResponse.status === 'fulfilled') {
         const response = attendanceResponse.value as any;
-        console.log('Raw attendance response:', response);
-        
         if (response.success && response.data) {
           const data = response.data;
-          console.log('Processed attendance data:', data);
-          console.log('Attendance array:', data.attendance);
-          console.log('Attendance length:', data.attendance?.length);
           
           if (data.attendance && Array.isArray(data.attendance)) {
             setAttendanceRecords(data.attendance);
             setTotalPages(data.pagination?.totalPages || 1);
-            console.log('✅ Attendance records set successfully:', data.attendance.length);
+            // Attendance records set successfully
           } else {
-            console.error('❌ No attendance array found in response');
             setAttendanceRecords([]);
           }
         } else {
-          console.error('❌ Invalid response format:', response);
           setAttendanceRecords([]);
         }
       } else {
-        console.error('❌ Error fetching attendance:', attendanceResponse.reason);
         setAttendanceRecords([]);
       }
 
       // Process stats
       if (statsResponse.status === 'fulfilled') {
         const response = statsResponse.value as any;
-        console.log('Raw stats response:', response);
-        
         if (response.success && response.data) {
-          console.log('Processed stats data:', response.data);
           setStats(response.data);
         } else {
-          console.error('❌ Invalid stats response format:', response);
           setStats(null);
         }
       } else {
@@ -273,13 +259,9 @@ export default function AdminAttendancePage() {
       // Process service persons
       if (servicePersonsResponse.status === 'fulfilled') {
         const response = servicePersonsResponse.value as any;
-        console.log('Raw service persons response:', response);
-        
         if (response.success && response.data) {
-          console.log('Processed service persons data:', response.data);
           setServicePersons(Array.isArray(response.data) ? response.data : []);
         } else {
-          console.error('❌ Invalid service persons response format:', response);
           setServicePersons([]);
         }
       } else {
@@ -290,13 +272,9 @@ export default function AdminAttendancePage() {
       // Process service zones
       if (serviceZonesResponse.status === 'fulfilled') {
         const response = serviceZonesResponse.value as any;
-        console.log('Raw service zones response:', response);
-        
         if (response.success && response.data) {
-          console.log('Processed service zones data:', response.data);
           setServiceZones(Array.isArray(response.data) ? response.data : []);
         } else {
-          console.error('❌ Invalid service zones response format:', response);
           setServiceZones([]);
         }
       } else {
@@ -315,10 +293,10 @@ export default function AdminAttendancePage() {
       setLoading(false);
       setIsRefreshing(false);
     }
-  };
+  }, [currentPage, dateRange, selectedDate, selectedUser, selectedStatus, selectedActivityType, selectedZone, searchQuery, toast]);
 
   // Format duration
-  const formatDuration = (minutes?: number) => {
+  const formatDuration = useCallback((minutes?: number) => {
     if (!minutes) return 'N/A';
     const hours = Math.floor(minutes / 60);
     const mins = minutes % 60;
@@ -326,20 +304,20 @@ export default function AdminAttendancePage() {
       return `${hours}h ${mins}m`;
     }
     return `${mins}m`;
-  };
+  }, []);
 
   // Format date for display
-  const formatDate = (dateString: string) => {
+  const formatDate = useCallback((dateString: string) => {
     const date = parseISO(dateString);
     if (isToday(date)) return `Today, ${format(date, 'HH:mm')}`;
     if (isYesterday(date)) return `Yesterday, ${format(date, 'HH:mm')}`;
     return format(date, 'MMM dd, HH:mm');
-  };
+  }, []);
 
 
   useEffect(() => {
     fetchAttendanceData();
-  }, [dateRange, selectedDate, selectedUser, selectedStatus, selectedActivityType, selectedZone, currentPage]);
+  }, [fetchAttendanceData]);
 
   useEffect(() => {
     const delayedSearch = setTimeout(() => {
@@ -353,22 +331,8 @@ export default function AdminAttendancePage() {
     return () => clearTimeout(delayedSearch);
   }, [searchQuery]);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 flex items-center justify-center">
-        <div className="text-center">
-          <div className="relative">
-            <div className="w-20 h-20 bg-gradient-to-r from-blue-600 to-indigo-700 rounded-full flex items-center justify-center mx-auto mb-6">
-              <Loader2 className="h-10 w-10 text-white animate-spin" />
-            </div>
-            <div className="absolute inset-0 w-20 h-20 bg-gradient-to-r from-blue-400 to-indigo-500 rounded-full animate-ping opacity-20 mx-auto"></div>
-          </div>
-          <h2 className="text-2xl font-bold text-slate-800 mb-2">Loading Attendance Data</h2>
-          <p className="text-slate-600">Please wait while we fetch the latest information...</p>
-        </div>
-      </div>
-    );
-  }
+  // Removed full-screen loading state to prevent CLS
+  // Using skeleton loaders instead to maintain layout
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
@@ -433,84 +397,118 @@ export default function AdminAttendancePage() {
           <div className="absolute bottom-0 left-0 w-32 h-32 bg-white/5 rounded-full -ml-16 -mb-16"></div>
         </div>
 
-        {/* Modern Statistics Overview with Gradients */}
-        {stats && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {/* Total Records Card */}
-            <Card className="relative overflow-hidden border-0 shadow-xl bg-gradient-to-br from-blue-500 to-blue-600 text-white transform transition-all duration-300 hover:scale-105 hover:shadow-2xl">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-blue-100">Total Records</CardTitle>
-                <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
-                  <FileText className="h-5 w-5 text-white" />
+        {/* Modern Statistics Overview with Gradients - Fixed height to prevent CLS */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {/* Total Records Card */}
+          <Card className="relative overflow-hidden border-0 shadow-xl bg-gradient-to-br from-blue-500 to-blue-600 text-white transform transition-all duration-300 hover:scale-105 hover:shadow-2xl h-32">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-blue-100">Total Records</CardTitle>
+              <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
+                <BarChart3 className="h-5 w-5 text-white" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              {loading || !stats ? (
+                <div className="space-y-2">
+                  <div className="h-8 bg-white/20 rounded animate-pulse"></div>
+                  <div className="h-4 bg-white/10 rounded animate-pulse w-24"></div>
                 </div>
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold mb-1">{stats.totalRecords}</div>
-                <p className="text-xs text-blue-100 flex items-center gap-1">
-                  <TrendingUp className="h-3 w-3" />
-                  {dateRange === 'today' ? 'Today' : `Last ${dateRange}`}
-                </p>
-              </CardContent>
-              <div className="absolute top-0 right-0 w-20 h-20 bg-white/10 rounded-full -mr-10 -mt-10"></div>
-            </Card>
+              ) : (
+                <>
+                  <div className="text-3xl font-bold mb-1">{stats.totalRecords}</div>
+                  <p className="text-xs text-blue-100 flex items-center gap-1">
+                    <TrendingUp className="h-3 w-3" />
+                    {dateRange === 'today' ? 'Today' : `Last ${dateRange}`}
+                  </p>
+                </>
+              )}
+            </CardContent>
+            <div className="absolute top-0 right-0 w-20 h-20 bg-white/10 rounded-full -mr-10 -mt-10"></div>
+          </Card>
 
-            {/* Checked In Card */}
-            <Card className="relative overflow-hidden border-0 shadow-xl bg-gradient-to-br from-green-500 to-emerald-600 text-white transform transition-all duration-300 hover:scale-105 hover:shadow-2xl">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-green-100">Active Users</CardTitle>
-                <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
-                  <UserCheck className="h-5 w-5 text-white" />
+          {/* Checked In Card */}
+          <Card className="relative overflow-hidden border-0 shadow-xl bg-gradient-to-br from-green-500 to-emerald-600 text-white transform transition-all duration-300 hover:scale-105 hover:shadow-2xl h-32">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-green-100">Active Users</CardTitle>
+              <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
+                <UserCheck className="h-5 w-5 text-white" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              {loading || !stats ? (
+                <div className="space-y-2">
+                  <div className="h-8 bg-white/20 rounded animate-pulse"></div>
+                  <div className="h-4 bg-white/10 rounded animate-pulse w-20"></div>
                 </div>
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold mb-1">{stats.statusBreakdown.CHECKED_IN || 0}</div>
-                <p className="text-xs text-green-100 flex items-center gap-1">
-                  <Activity className="h-3 w-3" />
-                  Currently active
-                </p>
-              </CardContent>
-              <div className="absolute top-0 right-0 w-20 h-20 bg-white/10 rounded-full -mr-10 -mt-10"></div>
-            </Card>
+              ) : (
+                <>
+                  <div className="text-3xl font-bold mb-1">{stats.statusBreakdown.CHECKED_IN || 0}</div>
+                  <p className="text-xs text-green-100 flex items-center gap-1">
+                    <Activity className="h-3 w-3" />
+                    Currently active
+                  </p>
+                </>
+              )}
+            </CardContent>
+            <div className="absolute top-0 right-0 w-20 h-20 bg-white/10 rounded-full -mr-10 -mt-10"></div>
+          </Card>
 
-            {/* Average Hours Card */}
-            <Card className="relative overflow-hidden border-0 shadow-xl bg-gradient-to-br from-purple-500 to-violet-600 text-white transform transition-all duration-300 hover:scale-105 hover:shadow-2xl">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-purple-100">Average Hours</CardTitle>
-                <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
-                  <Timer className="h-5 w-5 text-white" />
+          {/* Average Hours Card */}
+          <Card className="relative overflow-hidden border-0 shadow-xl bg-gradient-to-br from-purple-500 to-violet-600 text-white transform transition-all duration-300 hover:scale-105 hover:shadow-2xl h-32">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-purple-100">Average Hours</CardTitle>
+              <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
+                <Timer className="h-5 w-5 text-white" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              {loading || !stats ? (
+                <div className="space-y-2">
+                  <div className="h-8 bg-white/20 rounded animate-pulse"></div>
+                  <div className="h-4 bg-white/10 rounded animate-pulse w-28"></div>
                 </div>
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold mb-1">{stats.averageHours.toFixed(1)}h</div>
-                <p className="text-xs text-purple-100 flex items-center gap-1">
-                  <BarChart3 className="h-3 w-3" />
-                  Per person today
-                </p>
-              </CardContent>
-              <div className="absolute top-0 right-0 w-20 h-20 bg-white/10 rounded-full -mr-10 -mt-10"></div>
-            </Card>
+              ) : (
+                <>
+                  <div className="text-3xl font-bold mb-1">{stats.averageHours.toFixed(1)}h</div>
+                  <p className="text-xs text-purple-100 flex items-center gap-1">
+                    <BarChart3 className="h-3 w-3" />
+                    Per person today
+                  </p>
+                </>
+              )}
+            </CardContent>
+            <div className="absolute top-0 right-0 w-20 h-20 bg-white/10 rounded-full -mr-10 -mt-10"></div>
+          </Card>
 
-            {/* Issues Card */}
-            <Card className="relative overflow-hidden border-0 shadow-xl bg-gradient-to-br from-orange-500 to-red-500 text-white transform transition-all duration-300 hover:scale-105 hover:shadow-2xl">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-orange-100">Issues</CardTitle>
-                <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
-                  <AlertTriangle className="h-5 w-5 text-white" />
+          {/* Issues Card */}
+          <Card className="relative overflow-hidden border-0 shadow-xl bg-gradient-to-br from-orange-500 to-red-500 text-white transform transition-all duration-300 hover:scale-105 hover:shadow-2xl h-32">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-orange-100">Issues</CardTitle>
+              <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
+                <AlertTriangle className="h-5 w-5 text-white" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              {loading || !stats ? (
+                <div className="space-y-2">
+                  <div className="h-8 bg-white/20 rounded animate-pulse"></div>
+                  <div className="h-4 bg-white/10 rounded animate-pulse w-32"></div>
                 </div>
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold mb-1">
-                  {(stats.statusBreakdown.LATE || 0) + (stats.statusBreakdown.ABSENT || 0)}
-                </div>
-                <p className="text-xs text-orange-100 flex items-center gap-1">
-                  <ExternalLink className="h-3 w-3" />
-                  Require attention
-                </p>
-              </CardContent>
-              <div className="absolute top-0 right-0 w-20 h-20 bg-white/10 rounded-full -mr-10 -mt-10"></div>
-            </Card>
-          </div>
-        )}
+              ) : (
+                <>
+                  <div className="text-3xl font-bold mb-1">
+                    {(stats.statusBreakdown.LATE || 0) + (stats.statusBreakdown.ABSENT || 0)}
+                  </div>
+                  <p className="text-xs text-orange-100 flex items-center gap-1">
+                    <AlertTriangle className="h-3 w-3" />
+                    Require attention
+                  </p>
+                </>
+              )}
+            </CardContent>
+            <div className="absolute top-0 right-0 w-20 h-20 bg-white/10 rounded-full -mr-10 -mt-10"></div>
+          </Card>
+        </div>
 
         {/* Modern Filters Panel */}
         <Card className="border-0 shadow-xl bg-white/80 backdrop-blur-sm">
@@ -678,78 +676,97 @@ export default function AdminAttendancePage() {
             </div>
           </CardHeader>
           <CardContent className="p-0">
-            {attendanceRecords.length === 0 ? (
-              <div className="text-center py-16 bg-gradient-to-br from-slate-50 to-blue-50 m-6 rounded-xl">
-                <div className="p-4 bg-white/60 rounded-full w-24 h-24 mx-auto mb-6 flex items-center justify-center">
-                  <Users className="h-12 w-12 text-slate-400" />
-                </div>
-                <h3 className="text-xl font-semibold text-slate-700 mb-2">No Records Found</h3>
-                <p className="text-slate-500 max-w-md mx-auto">No attendance records match your current filters. Try adjusting your search criteria or date range.</p>
-              </div>
-            ) : (
-              <div className="overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="bg-gradient-to-r from-slate-100 to-slate-200 border-b-2 border-slate-300">
-                        <th className="text-left p-4 font-semibold text-slate-800 bg-gradient-to-r from-blue-50 to-blue-100">
-                          <div className="flex items-center gap-2">
-                            <User className="h-4 w-4 text-blue-600" />
-                            User Name
+            <div className="overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="bg-gradient-to-r from-slate-100 to-slate-200 border-b-2 border-slate-300">
+                      <th className="text-left p-4 font-semibold text-slate-800 bg-gradient-to-r from-blue-50 to-blue-100">
+                        <div className="flex items-center gap-2">
+                          <User className="h-4 w-4 text-blue-600" />
+                          User Name
+                        </div>
+                      </th>
+                      <th className="text-left p-4 font-semibold text-slate-800">
+                        <div className="flex items-center gap-2">
+                          <Calendar className="h-4 w-4 text-green-600" />
+                          Date
+                        </div>
+                      </th>
+                      <th className="text-left p-4 font-semibold text-slate-800">
+                        <div className="flex items-center gap-2">
+                          <Clock className="h-4 w-4 text-purple-600" />
+                          Check-In
+                        </div>
+                      </th>
+                      <th className="text-left p-4 font-semibold text-slate-800">
+                        <div className="flex items-center gap-2">
+                          <Clock className="h-4 w-4 text-orange-600" />
+                          Check-Out
+                        </div>
+                      </th>
+                      <th className="text-left p-4 font-semibold text-slate-800">
+                        <div className="flex items-center gap-2">
+                          <Timer className="h-4 w-4 text-indigo-600" />
+                          Total Hours
+                        </div>
+                      </th>
+                      <th className="text-left p-4 font-semibold text-slate-800">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle className="h-4 w-4 text-emerald-600" />
+                          Status
+                        </div>
+                      </th>
+                      <th className="text-left p-4 font-semibold text-slate-800">
+                        <div className="flex items-center gap-2">
+                          <Activity className="h-4 w-4 text-red-600" />
+                          Activities
+                        </div>
+                      </th>
+                      <th className="text-left p-4 font-semibold text-slate-800">
+                        <div className="flex items-center gap-2">
+                          <Eye className="h-4 w-4 text-slate-600" />
+                          Actions
+                        </div>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200">
+                    {loading ? (
+                      // Enhanced skeleton rows with fixed heights to prevent CLS
+                      Array.from({ length: 5 }).map((_, index) => (
+                        <tr key={`skeleton-${index}`} className={`h-24 ${index % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}`}>
+                          {Array.from({ length: 8 }).map((_, cellIndex) => (
+                            <td key={cellIndex} className="p-4">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-slate-200 rounded-full animate-pulse"></div>
+                                <div className="space-y-2 flex-1">
+                                  <div className="h-4 bg-slate-200 rounded animate-pulse w-24"></div>
+                                  <div className="h-5 bg-slate-100 rounded animate-pulse w-16"></div>
+                                </div>
+                              </div>
+                            </td>
+                          ))}
+                        </tr>
+                      ))
+                    ) : attendanceRecords.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="text-center py-16">
+                          <div className="bg-gradient-to-br from-slate-50 to-blue-50 p-8 rounded-xl mx-6">
+                            <div className="p-4 bg-white/60 rounded-full w-24 h-24 mx-auto mb-6 flex items-center justify-center">
+                              <Users className="h-12 w-12 text-slate-400" />
+                            </div>
+                            <h3 className="text-xl font-semibold text-slate-700 mb-2">No Records Found</h3>
+                            <p className="text-slate-500 max-w-md mx-auto">No attendance records match your current filters. Try adjusting your search criteria or date range.</p>
                           </div>
-                        </th>
-                        <th className="text-left p-4 font-semibold text-slate-800">
-                          <div className="flex items-center gap-2">
-                            <Calendar className="h-4 w-4 text-green-600" />
-                            Date
-                          </div>
-                        </th>
-                        <th className="text-left p-4 font-semibold text-slate-800">
-                          <div className="flex items-center gap-2">
-                            <Clock className="h-4 w-4 text-purple-600" />
-                            Check-In
-                          </div>
-                        </th>
-                        <th className="text-left p-4 font-semibold text-slate-800">
-                          <div className="flex items-center gap-2">
-                            <Clock className="h-4 w-4 text-orange-600" />
-                            Check-Out
-                          </div>
-                        </th>
-                        <th className="text-left p-4 font-semibold text-slate-800">
-                          <div className="flex items-center gap-2">
-                            <Timer className="h-4 w-4 text-indigo-600" />
-                            Total Hours
-                          </div>
-                        </th>
-                        <th className="text-left p-4 font-semibold text-slate-800">
-                          <div className="flex items-center gap-2">
-                            <CheckCircle className="h-4 w-4 text-emerald-600" />
-                            Status
-                          </div>
-                        </th>
-                        <th className="text-left p-4 font-semibold text-slate-800">
-                          <div className="flex items-center gap-2">
-                            <Activity className="h-4 w-4 text-red-600" />
-                            Activities
-                          </div>
-                        </th>
-                        <th className="text-left p-4 font-semibold text-slate-800">
-                          <div className="flex items-center gap-2">
-                            <Eye className="h-4 w-4 text-slate-600" />
-                            Actions
-                          </div>
-                        </th>
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-200">
-                      {attendanceRecords.map((record, index) => {
-                        const statusConfig = STATUS_CONFIG[record.status] || STATUS_CONFIG.CHECKED_OUT;
-                        const StatusIcon = statusConfig.icon;
-                        const isAutoCheckout = record.notes?.includes('Auto-checkout');
+                    ) : (
+                      processedRecords.map((record, index) => {
+                        const StatusIcon = record.statusConfig.icon;
                         
                         return (
-                          <tr key={record.id} className={`transition-all duration-200 hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 hover:shadow-md ${index % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}`}>
+                          <tr key={record.id} className={`transition-all duration-200 hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 hover:shadow-md ${index % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'} h-24`}>
                             {/* User Name */}
                             <td className="p-4">
                               <div className="flex items-center gap-3">
@@ -760,18 +777,23 @@ export default function AdminAttendancePage() {
                                   <div className="font-semibold text-slate-800 text-sm">
                                     {record.user.name || record.user.email}
                                   </div>
-                                  {record.user.serviceZones.length > 0 && (
-                                    <div className="flex flex-wrap gap-1 mt-1">
-                                      {record.user.serviceZones.slice(0, 2).map((sz, idx) => (
-                                        <span key={idx} className="text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded-full font-medium">
-                                          📍 {sz.serviceZone.name}
-                                        </span>
-                                      ))}
-                                      {record.user.serviceZones.length > 2 && (
-                                        <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded-full">+{record.user.serviceZones.length - 2}</span>
-                                      )}
-                                    </div>
-                                  )}
+                                  {/* Fixed height container to prevent CLS */}
+                                  <div className="min-h-[20px] mt-1">
+                                    {record.user.serviceZones.length > 0 ? (
+                                      <div className="flex flex-wrap gap-1">
+                                        {record.user.serviceZones.slice(0, 2).map((sz, idx) => (
+                                          <span key={idx} className="text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded-full font-medium">
+                                            📍 {sz.serviceZone.name}
+                                          </span>
+                                        ))}
+                                        {record.user.serviceZones.length > 2 && (
+                                          <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded-full">+{record.user.serviceZones.length - 2}</span>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <div className="text-xs text-slate-400">No zones assigned</div>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
                             </td>
@@ -821,11 +843,16 @@ export default function AdminAttendancePage() {
                                       </Button>
                                     )}
                                   </div>
-                                  {record.checkInAddress && (
-                                    <div className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded max-w-32 truncate">
-                                      📍 {record.checkInAddress}
-                                    </div>
-                                  )}
+                                  {/* Fixed height container for address */}
+                                  <div className="min-h-[24px] mt-2">
+                                    {record.checkInAddress ? (
+                                      <div className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded max-w-32 truncate">
+                                        📍 {record.checkInAddress}
+                                      </div>
+                                    ) : (
+                                      <div className="text-xs text-slate-400">No address</div>
+                                    )}
+                                  </div>
                                 </div>
                               ) : (
                                 <div className="flex items-center gap-2">
@@ -842,20 +869,20 @@ export default function AdminAttendancePage() {
                               {record.checkOutAt ? (
                                 <div className="space-y-2">
                                   <div className="flex items-center gap-2">
-                                    <div className={`p-2 rounded-lg ${isAutoCheckout ? 'bg-purple-100' : 'bg-orange-100'}`}>
-                                      <Clock className={`h-4 w-4 ${isAutoCheckout ? 'text-purple-600' : 'text-orange-600'}`} />
+                                    <div className={`p-2 rounded-lg ${record.isAutoCheckout ? 'bg-purple-100' : 'bg-orange-100'}`}>
+                                      <Clock className={`h-4 w-4 ${record.isAutoCheckout ? 'text-purple-600' : 'text-orange-600'}`} />
                                     </div>
                                     <div>
                                       <div className="flex items-center gap-1">
                                         <span className="font-semibold text-slate-800 text-sm">
                                           {format(parseISO(record.checkOutAt), 'HH:mm')}
                                         </span>
-                                        {isAutoCheckout && (
+                                        {record.isAutoCheckout && (
                                           <Zap className="h-3 w-3 text-purple-600" />
                                         )}
                                       </div>
                                       <div className="text-xs text-slate-500">
-                                        {isAutoCheckout ? '⚡ Auto checkout' : 'Manual checkout'}
+                                        {record.isAutoCheckout ? '⚡ Auto checkout' : 'Manual checkout'}
                                       </div>
                                     </div>
                                     {record.checkOutLatitude && record.checkOutLongitude && (
@@ -869,11 +896,16 @@ export default function AdminAttendancePage() {
                                       </Button>
                                     )}
                                   </div>
-                                  {record.checkOutAddress && (
-                                    <div className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded max-w-32 truncate">
-                                      📍 {record.checkOutAddress}
-                                    </div>
-                                  )}
+                                  {/* Fixed height container for checkout address */}
+                                  <div className="min-h-[24px] mt-2">
+                                    {record.checkOutAddress ? (
+                                      <div className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded max-w-32 truncate">
+                                        📍 {record.checkOutAddress}
+                                      </div>
+                                    ) : (
+                                      <div className="text-xs text-slate-400">No address</div>
+                                    )}
+                                  </div>
                                 </div>
                               ) : (
                                 <div className="flex items-center gap-2">
@@ -940,15 +972,20 @@ export default function AdminAttendancePage() {
                                   }`} />
                                 </div>
                                 <div>
-                                  <Badge className={`${statusConfig.color} border-0 font-semibold shadow-sm`}>
-                                    {statusConfig.label}
+                                  <Badge className={`${record.statusConfig.color} border-0 font-semibold shadow-sm`}>
+                                    {record.statusConfig.label}
                                   </Badge>
-                                  {record.status === 'CHECKED_IN' && (
-                                    <div className="text-xs text-emerald-600 mt-1 flex items-center gap-1">
-                                      <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
-                                      Active now
-                                    </div>
-                                  )}
+                                  {/* Fixed height container for status indicator */}
+                                  <div className="min-h-[20px] mt-1">
+                                    {record.status === 'CHECKED_IN' ? (
+                                      <div className="text-xs text-emerald-600 flex items-center gap-1">
+                                        <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+                                        Active now
+                                      </div>
+                                    ) : (
+                                      <div className="text-xs text-slate-400">Inactive</div>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
                             </td>
@@ -1008,49 +1045,61 @@ export default function AdminAttendancePage() {
                                     setEditModalOpen(true);
                                   }}
                                 >
-                                  <Edit className="h-4 w-4 text-indigo-600" />
+                                  <Pencil className="h-4 w-4 text-indigo-600" />
                                 </Button>
                               </div>
                             </td>
                           </tr>
                         );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                      })
+                    )}
+                  </tbody>
+                </table>
               </div>
-            )}
+            </div>
               
-              {/* Modern Pagination */}
+              {/* Modern Pagination - Fixed height to prevent CLS */}
               <div className="p-6">
-                {totalPages > 1 && (
-                  <div className="flex items-center justify-center space-x-4 mt-8 p-6 bg-gradient-to-r from-slate-50 to-blue-50 rounded-b-xl">
-                    <Button
-                      variant="outline"
-                      size="lg"
-                      onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                      disabled={currentPage === 1}
-                      className="bg-white hover:bg-blue-50 border-slate-200 text-slate-700 font-medium px-6 transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:hover:scale-100"
-                    >
-                      ← Previous
-                    </Button>
-                    <div className="flex items-center gap-3 bg-white px-4 py-2 rounded-lg shadow-sm border border-slate-200">
-                      <span className="text-sm font-medium text-slate-600">Page</span>
-                      <span className="text-lg font-bold text-blue-600">{currentPage}</span>
-                      <span className="text-sm text-slate-400">of</span>
-                      <span className="text-lg font-bold text-slate-700">{totalPages}</span>
+                <div className="flex items-center justify-center space-x-4 mt-8 p-6 bg-gradient-to-r from-slate-50 to-blue-50 rounded-b-xl min-h-[80px]">
+                  {loading ? (
+                    <div className="flex items-center gap-4">
+                      <div className="h-10 w-24 bg-slate-200 rounded animate-pulse"></div>
+                      <div className="h-10 w-32 bg-slate-200 rounded animate-pulse"></div>
+                      <div className="h-10 w-24 bg-slate-200 rounded animate-pulse"></div>
                     </div>
-                    <Button
-                      variant="outline"
-                      size="lg"
-                      onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-                      disabled={currentPage === totalPages}
-                      className="bg-white hover:bg-blue-50 border-slate-200 text-slate-700 font-medium px-6 transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:hover:scale-100"
-                    >
-                      Next →
-                    </Button>
-                  </div>
-                )}
+                  ) : totalPages > 1 ? (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="lg"
+                        onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                        disabled={currentPage === 1}
+                        className="bg-white hover:bg-blue-50 border-slate-200 text-slate-700 font-medium px-6 transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:hover:scale-100"
+                      >
+                        ← Previous
+                      </Button>
+                      <div className="flex items-center gap-3 bg-white px-4 py-2 rounded-lg shadow-sm border border-slate-200">
+                        <span className="text-sm font-medium text-slate-600">Page</span>
+                        <span className="text-lg font-bold text-blue-600">{currentPage}</span>
+                        <span className="text-sm text-slate-400">of</span>
+                        <span className="text-lg font-bold text-slate-700">{totalPages}</span>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="lg"
+                        onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                        disabled={currentPage === totalPages}
+                        className="bg-white hover:bg-blue-50 border-slate-200 text-slate-700 font-medium px-6 transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:hover:scale-100"
+                      >
+                        Next →
+                      </Button>
+                    </>
+                  ) : (
+                    <div className="text-sm text-slate-500 font-medium">
+                      {attendanceRecords.length > 0 ? `Showing ${attendanceRecords.length} records` : 'No pagination needed'}
+                    </div>
+                  )}
+                </div>
               </div>
           </CardContent>
         </Card>
@@ -1130,4 +1179,6 @@ export default function AdminAttendancePage() {
       </div>
     </div>
   );
-};
+});
+
+export default AdminAttendancePage;

@@ -4,16 +4,20 @@ import React, { useState, useEffect } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 
-// Import components directly
+// Import lightweight components directly
 import ExecutiveHeader from './ExecutiveHeader';
 import ExecutiveSummaryCards from './ExecutiveSummaryCards';
 import QuickStatsAlerts from './QuickStatsAlerts';
 import LazyDashboardSection from './LazyDashboardSection';
 import RecentTickets from './RecentTickets';
-import FieldServiceAnalytics from './FieldServiceAnalytics';
-import PerformanceAnalytics from './PerformanceAnalytics';
-import AdvancedAnalytics from './AdvancedAnalytics';
-import ZonePerformanceAnalytics from './ZonePerformanceAnalytics';
+
+// Import heavy components dynamically
+import {
+  DynamicFieldServiceAnalytics,
+  DynamicPerformanceAnalytics,
+  DynamicAdvancedAnalytics,
+  DynamicZonePerformanceAnalytics,
+} from './DynamicDashboardComponents';
 
 // Import types
 import type { DashboardData, StatusDistribution, TrendsData } from '@/components/dashboard/types';
@@ -158,19 +162,19 @@ export default function DashboardClient({
 
       {/* Lazy-loaded analytics components with intersection observer */}
       <LazyDashboardSection className="mb-8">
-        <FieldServiceAnalytics 
+        <DynamicFieldServiceAnalytics 
           dashboardData={dashboardData} 
         />
       </LazyDashboardSection>
 
       <LazyDashboardSection>
-        <PerformanceAnalytics 
+        <DynamicPerformanceAnalytics 
           dashboardData={dashboardData} 
         />
       </LazyDashboardSection>
 
       <LazyDashboardSection>
-        <AdvancedAnalytics 
+        <DynamicAdvancedAnalytics 
           dashboardData={dashboardData}
           statusDistribution={statusDistribution}
           ticketTrends={ticketTrends}
@@ -186,7 +190,7 @@ export default function DashboardClient({
       </LazyDashboardSection>
 
       <LazyDashboardSection>
-        <ZonePerformanceAnalytics 
+        <DynamicZonePerformanceAnalytics 
           dashboardData={dashboardData} 
           onRefresh={handleRefresh} 
           isRefreshing={isRefreshing} 

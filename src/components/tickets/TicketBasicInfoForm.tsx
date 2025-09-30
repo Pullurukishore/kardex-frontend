@@ -102,8 +102,8 @@ export function TicketBasicInfoForm({ control, zones, isSubmitting, hideZoneSele
                   disabled={isSubmitting}
                 >
                   <FormControl>
-                    <SelectTrigger className="w-full" disabled={hideZoneSelector || isSubmitting}>
-                      <SelectValue placeholder={hideZoneSelector ? zones[0]?.name || 'Loading...' : 'Select priority'} />
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select priority" />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>

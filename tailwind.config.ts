@@ -8,6 +8,81 @@ const config: Config = {
     './src/app/**/*.{js,ts,jsx,tsx,mdx}',
     './src/contexts/**/*.{js,ts,jsx,tsx,mdx}',
   ],
+  // Optimize for production builds
+  future: {
+    hoverOnlyWhenSupported: true,
+  },
+  // Production CSS purging configuration
+  safelist: [
+    // Animation classes that might be added dynamically
+    'animate-pulse',
+    'animate-spin',
+    'animate-bounce',
+    // Dynamic color classes for badges and status indicators
+    {
+      pattern: /bg-(blue|green|red|yellow|purple|orange)-(50|100|500|600|700)/,
+    },
+    {
+      pattern: /text-(blue|green|red|yellow|purple|orange)-(600|700|800|900)/,
+    },
+    {
+      pattern: /border-(blue|green|red|yellow|purple|orange)-(200|300)/,
+    },
+    // Grid classes that might be used dynamically
+    {
+      pattern: /grid-cols-(1|2|3|4|5|6|7|8|9|10|11|12)/,
+    },
+    // Responsive display classes
+    'sm:flex', 'md:flex', 'lg:flex', 'xl:flex', '2xl:flex',
+    'sm:hidden', 'md:hidden', 'lg:hidden', 'xl:hidden', '2xl:hidden',
+    'sm:block', 'md:block', 'lg:block', 'xl:block', '2xl:block',
+    'sm:flex-row', 'sm:flex-col', 'md:flex-row', 'md:flex-col',
+    'lg:flex-row', 'lg:flex-col', 'xl:flex-row', 'xl:flex-col',
+    // Responsive grid classes
+    'sm:grid-cols-1', 'sm:grid-cols-2', 'sm:grid-cols-3', 'sm:grid-cols-4',
+    'md:grid-cols-1', 'md:grid-cols-2', 'md:grid-cols-3', 'md:grid-cols-4',
+    'lg:grid-cols-1', 'lg:grid-cols-2', 'lg:grid-cols-3', 'lg:grid-cols-4', 'lg:grid-cols-5', 'lg:grid-cols-6',
+    'xl:grid-cols-1', 'xl:grid-cols-2', 'xl:grid-cols-3', 'xl:grid-cols-4', 'xl:grid-cols-5', 'xl:grid-cols-6',
+  ],
+  // Disable unused features for smaller CSS bundle (~3KB reduction)
+  corePlugins: {
+    // Disable unused backdrop filters
+    backdropBlur: false,
+    backdropBrightness: false,
+    backdropContrast: false,
+    backdropGrayscale: false,
+    backdropHueRotate: false,
+    backdropInvert: false,
+    backdropOpacity: false,
+    backdropSaturate: false,
+    backdropSepia: false,
+    // Disable unused filters
+    blur: false,
+    brightness: false,
+    contrast: false,
+    dropShadow: false,
+    grayscale: false,
+    hueRotate: false,
+    invert: false,
+    saturate: false,
+    sepia: false,
+    // Disable unused layout features  
+    isolation: false,
+    mixBlendMode: false,
+    objectFit: false,
+    objectPosition: false,
+    overscrollBehavior: false,
+    // Disable unused text features
+    textDecorationColor: false,
+    textDecorationStyle: false,
+    textDecorationThickness: false,
+    textIndent: false,
+    textUnderlineOffset: false,
+    // Disable unused transforms (keep scale for hover effects)
+    rotate: false,
+    skew: false,
+    transformOrigin: false,
+  },
   theme: {
     container: {
       center: true,

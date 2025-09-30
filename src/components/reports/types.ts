@@ -81,11 +81,63 @@ export interface ReportData {
   summary: any;
   statusDistribution?: Record<string, number>;
   priorityDistribution?: Record<string, number>;
+  slaDistribution?: Record<string, number>;
+  zoneDistribution?: Array<{
+    zoneId: number;
+    zoneName: string;
+    count: number;
+  }>;
+  customerDistribution?: Array<{
+    customerId: number;
+    customerName: string;
+    count: number;
+  }>;
+  assigneeDistribution?: Array<{
+    assigneeId: number;
+    assigneeName: string;
+    count: number;
+  }>;
   dailyTrends?: Array<{
     date: string;
     created: number;
     resolved: number;
+    escalated?: number;
+    assigned?: number;
   }>;
+  recentTickets?: Array<{
+    id: number;
+    title: string;
+    status: string;
+    priority: string;
+    createdAt: string;
+    customerName: string;
+    zoneName: string;
+    assigneeName: string;
+    isEscalated: boolean;
+    slaStatus: string;
+    hasRating: boolean;
+    rating: number | null;
+  }>;
+  customerPerformanceMetrics?: Array<{
+    customerId: number;
+    customerName: string;
+    totalTickets: number;
+    criticalIssues: number;
+    highPriorityIssues: number;
+    escalatedIssues: number;
+    repeatIssues: number;
+    avgResolutionTimeMinutes: number;
+    avgResolutionTimeHours: number;
+    machineHealthScore: number;
+    riskLevel: 'HIGH' | 'MEDIUM' | 'LOW';
+  }>;
+  insights?: {
+    topPerformingZone: string;
+    mostActiveCustomer: string;
+    topAssignee: string;
+    worstPerformingCustomer: string;
+    avgTravelTimeFormatted: string;
+  };
   ratingDistribution?: Record<number, number>;
   customerRatings?: Record<string, any>;
   zones?: Array<any>;
@@ -127,6 +179,39 @@ export interface ReportData {
     to: string;
     totalDays: number;
   };
+  // HER Analysis specific properties
+  herAnalysis?: {
+    tickets: Array<{
+      id: number;
+      title: string;
+      priority: string;
+      status: string;
+      createdAt: string;
+      resolvedAt?: string;
+      slaDueAt?: string;
+      herHours: number;
+      actualResolutionHours?: number;
+      isHerBreached: boolean;
+      businessHoursUsed: number;
+      customer: string;
+      assignedTo?: string;
+      zone: string;
+    }>;
+    summary: {
+      totalTickets: number;
+      herCompliantTickets: number;
+      herBreachedTickets: number;
+      complianceRate: number;
+      averageHerHours: number;
+      averageActualHours: number;
+    };
+    priorityBreakdown: Record<string, {
+      total: number;
+      compliant: number;
+      breached: number;
+      complianceRate: number;
+    }>;
+  };
 }
 
 export interface ReportType {
@@ -150,6 +235,9 @@ export interface Customer {
 export interface Asset {
   id: string;
   name?: string;
+  machineId?: string;
+  model?: string;
+  serialNo?: string;
 }
 
 export const REPORT_TYPES: ReportType[] = [
@@ -169,8 +257,8 @@ export const REPORT_TYPES: ReportType[] = [
   },
   { 
     value: 'industrial-data', 
-    label: 'Industrial Operations Report', 
-    description: 'Equipment downtime, machine performance, and operational efficiency metrics',
+    label: 'Machine Reports', 
+    description: 'Machine downtime analysis, equipment performance tracking, and maintenance efficiency metrics',
     icon: 'Settings',
     color: 'from-green-500 to-green-600'
   },
@@ -182,25 +270,26 @@ export const REPORT_TYPES: ReportType[] = [
     color: 'from-purple-500 to-purple-600'
   },
   { 
-    value: 'agent-productivity', 
-    label: 'Agent Performance Report', 
-    description: 'Individual agent productivity, resolution rates, and performance analytics',
+    value: 'service-person-reports', 
+    label: 'Service Person Performance Report', 
+    description: 'Comprehensive performance analytics for all service persons and zone users including productivity, resolution rates, and efficiency metrics',
     icon: 'Users',
     color: 'from-indigo-500 to-indigo-600'
   },
-  {
-    value: 'executive-summary',
-    label: 'Executive Dashboard Report',
-    description: 'High-level KPIs, business metrics, and executive summary analytics',
-    icon: 'Award',
-    color: 'from-rose-500 to-rose-600'
-  },
+
   {
     value: 'service-person-attendance',
     label: 'Service Person Attendance Report',
     description: 'Comprehensive attendance tracking with date ranges, activity logs, and performance metrics',
     icon: 'UserCheck',
     color: 'from-teal-500 to-teal-600'
+  },
+  {
+    value: 'her-analysis',
+    label: 'HER (Hours of Expected Resolution) Report',
+    description: 'SLA compliance analysis showing maximum time allowed to resolve tickets based on business hours (9 AM - 5:30 PM, Mon-Sat)',
+    icon: 'Clock',
+    color: 'from-orange-500 to-orange-600'
   }
 ];
 

@@ -1,6 +1,9 @@
-'use server';
-
 import { Suspense } from 'react';
+import Script from 'next/script';
+
+// Force dynamic rendering for this page
+export const dynamic = 'force-dynamic';
+
 import { DashboardErrorBoundary } from '@/components/dashboard/DashboardErrorBoundary';
 import DashboardErrorFallback from '@/components/dashboard/DashboardErrorFallback';
 import { getAllDashboardData } from '@/lib/server/dashboard';
@@ -66,8 +69,10 @@ export default async function DashboardPage() {
         unassignedTickets: { count: 0, critical: false },
         inProgressTickets: { count: 0, change: 0 },
         avgResponseTime: { hours: 0, minutes: 0, change: 0, isPositive: true },
-        avgResolutionTime: { days: 0, hours: 0, change: 0, isPositive: true },
+        avgResolutionTime: { days: 0, hours: 0, minutes: 0, change: 0, isPositive: true },
         avgDowntime: { hours: 0, minutes: 0, change: 0, isPositive: true },
+        avgTravelTime: { hours: 0, minutes: 0, change: 0, isPositive: true },
+        avgOnsiteResolutionTime: { hours: 0, minutes: 0, change: 0, isPositive: true },
         monthlyTickets: { count: 0, change: 0 },
         activeMachines: { count: 0, change: 0 },
         ticketDistribution: {
@@ -97,15 +102,51 @@ export default async function DashboardPage() {
     };
 
     return (
-      <DashboardErrorBoundary fallback={DashboardErrorFallback}>
-        <Suspense fallback={<DashboardLoading />}>
-          <DashboardClient 
-            initialDashboardData={safeDashboardData}
-            initialStatusDistribution={statusDistribution || { distribution: [] }}
-            initialTicketTrends={ticketTrends || { trends: [] }}
-          />
-        </Suspense>
-      </DashboardErrorBoundary>
+      <>
+        {/* Preload critical resources */}
+        <Script
+          id="dashboard-preload"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `
+              // Preload critical dashboard resources
+              const preloadLinks = [
+                { rel: 'preconnect', href: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000' },
+                { rel: 'dns-prefetch', href: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000' }
+              ];
+              preloadLinks.forEach(link => {
+                const linkEl = document.createElement('link');
+                Object.assign(linkEl, link);
+                document.head.appendChild(linkEl);
+              });
+            `
+          }}
+        />
+        
+        {/* Non-critical analytics scripts */}
+        <Script
+          id="dashboard-analytics"
+          strategy="lazyOnload"
+          dangerouslySetInnerHTML={{
+            __html: `
+              // Initialize performance monitoring
+              if (typeof window !== 'undefined' && window.performance) {
+                window.dashboardLoadTime = Date.now();
+              }
+            `
+          }}
+        />
+
+        <DashboardErrorBoundary fallback={DashboardErrorFallback}>
+          <Suspense fallback={<DashboardLoading />}>
+            <DashboardClient 
+              initialDashboardData={safeDashboardData}
+              initialStatusDistribution={statusDistribution || { distribution: [] }}
+              initialTicketTrends={ticketTrends || { trends: [] }}
+            />
+          </Suspense>
+        </DashboardErrorBoundary>
+      </>
     );
   } catch (error) {
     console.error('Failed to load dashboard:', error);

@@ -41,7 +41,7 @@ import {
   Square,
 } from "lucide-react";
 import { apiClient } from "@/lib/api/api-client";
-import api from "@/lib/api/axios";
+import { cn } from "@/lib/utils";
 
 interface ActivityLog {
   id: number;
@@ -72,17 +72,80 @@ interface ActivityLog {
 
 const ACTIVITY_TYPES = [
   { value: "TICKET_WORK", label: "Ticket Work", icon: "🎫" },
-  { value: "BD_VISIT", label: "BD Visit", icon: "🏢" },
   { value: "PO_DISCUSSION", label: "PO Discussion", icon: "💼" },
   { value: "SPARE_REPLACEMENT", label: "Spare Replacement", icon: "🔧" },
   { value: "TRAVEL", label: "Travel", icon: "🚗" },
   { value: "TRAINING", label: "Training", icon: "📚" },
-  { value: "MEETING", label: "Meeting", icon: "👥" },
-  { value: "MAINTENANCE", label: "Maintenance", icon: "⚙️" },
+  { value: "REVIEW_MEETING", label: "Review Meeting", icon: "👥" },
+  { value: "RELOCATION", label: "Relocation", icon: "📦" },
+  { value: "MAINTENANCE_PLANNED", label: "Maintenance Planned", icon: "🔧" },
+  { value: "INSTALLATION", label: "Installation", icon: "🔨" },
   { value: "DOCUMENTATION", label: "Documentation", icon: "📝" },
   { value: "WORK_FROM_HOME", label: "Work From Home", icon: "🏠" },
   { value: "OTHER", label: "Other", icon: "📋" },
 ];
+
+// Stage templates for different activity types (dual-flow system)
+const ACTIVITY_STAGE_TEMPLATES: Record<string, Array<{
+  stage: string;
+  label: string;
+  description: string;
+  required: boolean;
+  icon: string;
+}>> = {
+  PO_DISCUSSION: [
+    { stage: 'STARTED', label: 'Started', description: 'Begin PO discussion', required: true, icon: '🚀' },
+    { stage: 'TRAVELING', label: 'Traveling', description: 'Travel to location', required: true, icon: '🚗' },
+    { stage: 'ARRIVED', label: 'Arrived', description: 'Arrive at customer location', required: true, icon: '📍' },
+    { stage: 'PLANNING', label: 'Planning', description: 'Discuss PO requirements', required: true, icon: '📋' },
+    { stage: 'DOCUMENTATION', label: 'Documentation', description: 'Document discussion outcomes', required: true, icon: '📝' },
+    { stage: 'COMPLETED', label: 'Completed', description: 'Complete PO discussion', required: true, icon: '✅' }
+  ],
+  
+  SPARE_REPLACEMENT: [
+    { stage: 'STARTED', label: 'Started', description: 'Begin spare replacement', required: true, icon: '🚀' },
+    { stage: 'TRAVELING', label: 'Traveling', description: 'Travel to location', required: true, icon: '🚗' },
+    { stage: 'ARRIVED', label: 'Arrived', description: 'Arrive at customer location', required: true, icon: '📍' },
+    { stage: 'ASSESSMENT', label: 'Assessment', description: 'Assess what needs replacement', required: true, icon: '🔍' },
+    { stage: 'EXECUTION', label: 'Execution', description: 'Replace the spare part', required: true, icon: '🔧' },
+    { stage: 'TESTING', label: 'Testing', description: 'Test the replacement', required: true, icon: '🧪' },
+    { stage: 'CUSTOMER_HANDOVER', label: 'Customer Handover', description: 'Customer handover', required: false, icon: '🤝' },
+    { stage: 'COMPLETED', label: 'Completed', description: 'Complete replacement', required: true, icon: '✅' }
+  ],
+  
+  INSTALLATION: [
+    { stage: 'STARTED', label: 'Started', description: 'Begin installation', required: true, icon: '🚀' },
+    { stage: 'TRAVELING', label: 'Traveling', description: 'Travel to location', required: true, icon: '🚗' },
+    { stage: 'ARRIVED', label: 'Arrived', description: 'Arrive at installation site', required: true, icon: '📍' },
+    { stage: 'ASSESSMENT', label: 'Assessment', description: 'Site assessment', required: true, icon: '🔍' },
+    { stage: 'PREPARATION', label: 'Preparation', description: 'Prepare for installation', required: true, icon: '🛠️' },
+    { stage: 'EXECUTION', label: 'Execution', description: 'Perform installation', required: true, icon: '🔨' },
+    { stage: 'TESTING', label: 'Testing', description: 'Test installation', required: true, icon: '🧪' },
+    { stage: 'CUSTOMER_HANDOVER', label: 'Customer Handover', description: 'Customer training/handover', required: true, icon: '🤝' },
+    { stage: 'DOCUMENTATION', label: 'Documentation', description: 'Document installation', required: true, icon: '📝' },
+    { stage: 'COMPLETED', label: 'Completed', description: 'Complete installation', required: true, icon: '✅' }
+  ],
+
+  MAINTENANCE_PLANNED: [
+    { stage: 'STARTED', label: 'Started', description: 'Begin maintenance', required: true, icon: '🚀' },
+    { stage: 'TRAVELING', label: 'Traveling', description: 'Travel to location', required: true, icon: '🚗' },
+    { stage: 'ARRIVED', label: 'Arrived', description: 'Arrive at maintenance site', required: true, icon: '📍' },
+    { stage: 'PREPARATION', label: 'Preparation', description: 'Prepare maintenance tools', required: true, icon: '🛠️' },
+    { stage: 'EXECUTION', label: 'Execution', description: 'Perform maintenance', required: true, icon: '🔧' },
+    { stage: 'TESTING', label: 'Testing', description: 'Test after maintenance', required: true, icon: '🧪' },
+    { stage: 'DOCUMENTATION', label: 'Documentation', description: 'Document maintenance', required: true, icon: '📝' },
+    { stage: 'COMPLETED', label: 'Completed', description: 'Complete maintenance', required: true, icon: '✅' }
+  ],
+
+  // Default template for other activity types
+  DEFAULT: [
+    { stage: 'STARTED', label: 'Started', description: 'Begin activity', required: true, icon: '🚀' },
+    { stage: 'TRAVELING', label: 'Traveling', description: 'Travel to location', required: false, icon: '🚗' },
+    { stage: 'ARRIVED', label: 'Arrived', description: 'Arrive at location', required: false, icon: '📍' },
+    { stage: 'WORK_IN_PROGRESS', label: 'Work in Progress', description: 'Work in progress', required: true, icon: '⚡' },
+    { stage: 'COMPLETED', label: 'Completed', description: 'Complete activity', required: true, icon: '✅' }
+  ]
+};
 
 interface ActivityLoggerProps {
   onActivityChange?: () => Promise<void> | void;
@@ -101,6 +164,40 @@ interface ApiResponse {
   };
 }
 
+// Enhanced activity flow management
+const getActivityFlow = (activityType: string, ticketId?: number) => {
+  if (activityType === 'TICKET_WORK' && ticketId) {
+    return 'TICKET_STATUS_FLOW'; // Use existing ticket status progression
+  } else {
+    return 'ACTIVITY_STAGE_FLOW'; // Use new stage progression with stages
+  }
+};
+
+// Activity stages for non-ticket activities
+const ACTIVITY_STAGES = {
+  MAINTENANCE_PLANNED: ['PLANNING', 'IN_PROGRESS', 'TESTING', 'COMPLETED'],
+  MAINTENANCE_EMERGENCY: ['ASSESSMENT', 'IN_PROGRESS', 'TESTING', 'COMPLETED'],
+  INSPECTION: ['PREPARATION', 'INSPECTION', 'DOCUMENTATION', 'COMPLETED'],
+  TRAINING: ['SETUP', 'DELIVERY', 'EVALUATION', 'COMPLETED'],
+  TRAVEL: ['STARTED', 'IN_TRANSIT', 'ARRIVED', 'COMPLETED'],
+  BREAK: ['STARTED', 'COMPLETED'],
+  WORK_FROM_HOME: ['STARTED', 'IN_PROGRESS', 'COMPLETED'],
+  OTHER: ['STARTED', 'IN_PROGRESS', 'COMPLETED']
+};
+
+// Get next stage for activity
+const getNextStage = (activityType: string, currentStage?: string) => {
+  const stages = ACTIVITY_STAGES[activityType as keyof typeof ACTIVITY_STAGES] || ACTIVITY_STAGES.OTHER;
+  if (!currentStage) return stages[0];
+  const currentIndex = stages.indexOf(currentStage);
+  return currentIndex < stages.length - 1 ? stages[currentIndex + 1] : null;
+};
+
+// Get all stages for activity type
+const getActivityStages = (activityType: string) => {
+  return ACTIVITY_STAGES[activityType as keyof typeof ACTIVITY_STAGES] || ACTIVITY_STAGES.OTHER;
+};
+
 // Memoize the component to prevent unnecessary re-renders
 function ActivityLoggerComponent({
   onActivityChange,
@@ -116,7 +213,26 @@ function ActivityLoggerComponent({
     null
   );
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [isMobile, setIsMobile] = useState(false);
+  
+  // Dual-flow system state
+  const [selectedActivityType, setSelectedActivityType] = useState<string>('');
+  const [currentStage, setCurrentStage] = useState<string>('');
+  const [stageTemplate, setStageTemplate] = useState<any[]>([]);
+  const [activityFlow, setActivityFlow] = useState<'TICKET_STATUS_FLOW' | 'ACTIVITY_STAGE_FLOW'>('ACTIVITY_STAGE_FLOW');
+  
   const { toast } = useToast();
+
+  // Detect mobile screen size
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768); // md breakpoint
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // Fallback timeout to prevent infinite loading
   useEffect(() => {
@@ -133,7 +249,8 @@ function ActivityLoggerComponent({
   const activityChangeInProgress = useRef(false);
   const lastFetchTime = useRef(0);
   const justEndedActivity = useRef(false);
-  const FETCH_COOLDOWN = 2000; // 2 seconds cooldown between fetches
+  const initialLoadComplete = useRef(false);
+  const FETCH_COOLDOWN = 1000; // 1 second cooldown between fetches (reduced from 2000ms)
 
   // Form state
   const [formData, setFormData] = useState({
@@ -217,10 +334,11 @@ function ActivityLoggerComponent({
   };
 
   // Fetch activities from backend API with cooldown to prevent infinite loops
-  const fetchActivities = useCallback(async () => {
+  const fetchActivities = useCallback(async (forceRefresh = false) => {
     const now = Date.now();
-    // Skip cooldown if this is the first fetch (lastFetchTime is 0)
+    // Skip cooldown if this is the first fetch (lastFetchTime is 0) or if force refresh is requested
     if (
+      !forceRefresh &&
       lastFetchTime.current > 0 &&
       now - lastFetchTime.current < FETCH_COOLDOWN
     ) {
@@ -232,12 +350,10 @@ function ActivityLoggerComponent({
     try {
       setLoading(true);
 
-      const response = await api.get("/activities");
+      const responseData = await apiClient.get("/activities");
 
-      // Parse response according to backend structure: { activities: [...], pagination: {...} }
-      const responseData = response.data;
-
-      const activitiesData = responseData?.activities || [];
+      // Handle the response structure - could be direct data or wrapped in ApiResponse
+      const activitiesData = (responseData as any)?.activities || responseData || [];
 
       // Update activities state - force update even if same data
       setActivities([...activitiesData]);
@@ -275,12 +391,7 @@ function ActivityLoggerComponent({
     try {
       setTicketsLoading(true);
 
-      const response = await api.get("/tickets", {
-        params: {
-          assignedToMe: true,
-          limit: 50,
-        },
-      });
+      const response = await apiClient.get("/tickets?view=assigned-to-service-person&limit=50");
 
       // Parse tickets from response
       const responseData = response.data;
@@ -352,7 +463,7 @@ function ActivityLoggerComponent({
       };
 
       // Create activity via backend API
-      const response = await api.post("/activities", activityData);
+      const response = await apiClient.post("/activities", activityData);
 
       // Reset form and close dialog
       setFormData({
@@ -364,15 +475,13 @@ function ActivityLoggerComponent({
       setLocationError(null);
       setDialogOpen(false);
 
-      // Refresh activities first
-      await fetchActivities();
+      // Force refresh activities immediately after creating new activity
+      await fetchActivities(true);
 
-      // Notify parent component with delay to prevent rapid calls
-      setTimeout(async () => {
-        if (onActivityChange) {
-          await onActivityChange();
-        }
-      }, 500);
+      // Notify parent component immediately for faster UI updates
+      if (onActivityChange) {
+        await onActivityChange();
+      }
 
       toast({
         title: "Activity Started",
@@ -422,12 +531,18 @@ function ActivityLoggerComponent({
       const activityToEnd = { ...activeActivity };
 
       // Make API call to end the activity
-      const response = await api.put(`/activities/${activeActivity.id}`, {
+      const response = await apiClient.put(`/activities/${activeActivity.id}`, {
         endTime: new Date().toISOString(),
       });
 
+      console.log('End Activity Response:', response);
+
       // Get updated activity data from response
-      const updatedActivity = response.data.activity || response.data;
+      // Handle different response structures from apiClient
+      const responseData = response as any;
+      const updatedActivity = responseData.activity || responseData.data?.activity || responseData.data || responseData;
+      
+      console.log('Updated Activity Data:', updatedActivity);
 
       // Immediately update local state for instant UI feedback
       const endTime = new Date().toISOString();
@@ -476,19 +591,21 @@ function ActivityLoggerComponent({
         description: `"${activityToEnd.title}" - ${durationText}`,
       });
 
-      // Force refresh of activity data after a short delay
+      // Force refresh of activity data with reduced delay
       setTimeout(async () => {
-        // Reset cooldown to allow immediate refresh
-        lastFetchTime.current = 0;
+        console.log('ActivityLogger: Refreshing activities after end...');
         
-        // Fetch fresh activities from backend
-        const freshActivities = await fetchActivities();
+        // Force refresh with immediate update
+        const freshActivities = await fetchActivities(true);
         
         // Notify parent to refresh dashboard stats
         if (onActivityChange) {
+          console.log('ActivityLogger: Calling onActivityChange callback...');
           await onActivityChange();
+        } else {
+          console.log('ActivityLogger: No onActivityChange callback provided');
         }
-      }, 1000);
+      }, 500);
     } catch (error: any) {
       // Determine appropriate error message
       let errorMessage = "Failed to end activity";
@@ -580,28 +697,36 @@ function ActivityLoggerComponent({
     );
   };
 
-  // Update activities when prop changes
+  // Update activities when prop changes with improved change detection
   useEffect(() => {
     // Don't override local state if we just ended an activity
     if (justEndedActivity.current) {
       return;
     }
 
-    // Always use propActivities when provided, regardless of length
-    // This ensures parent component data is properly synchronized
+    // Always use propActivities when provided, with change detection to prevent unnecessary re-renders
     if (propActivities !== undefined && Array.isArray(propActivities)) {
-      setActivities([...propActivities]); // Create new array to force re-render
-      setLoading(false);
+      // Check if activities actually changed to prevent unnecessary updates
+      const currentIds = activities.map(a => a.id).sort();
+      const newIds = propActivities.map(a => a.id).sort();
+      const hasChanged = currentIds.length !== newIds.length || 
+                        currentIds.some((id, index) => id !== newIds[index]);
+      
+      if (hasChanged || !initialLoadComplete.current) {
+        setActivities([...propActivities]); // Create new array to force re-render
+        setLoading(false);
+        initialLoadComplete.current = true;
 
-      // Find active activity from props
-      const activeActivity = propActivities.find(
-        (activity: ActivityLog) => !activity.endTime
-      );
-      setActiveActivity(activeActivity || null);
+        // Find active activity from props
+        const activeActivity = propActivities.find(
+          (activity: ActivityLog) => !activity.endTime
+        );
+        setActiveActivity(activeActivity || null);
+      }
     }
     // Don't fetch activities here to avoid infinite loops
     // Let the initial load effect handle fetching when no props are provided
-  }, [propActivities]);
+  }, [propActivities, activities]);
 
   // Handle activity changes and refresh data
   const handleActivityChange = useCallback(async () => {
@@ -647,18 +772,26 @@ function ActivityLoggerComponent({
     const loadData = async () => {
       if (!mounted) return;
 
+      // Add small delay to ensure parent component finishes loading first
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      if (!mounted) return;
+
       // Only fetch activities if no props are provided
       // If props are provided, the propActivities useEffect will handle the data
       if (!propActivities || !Array.isArray(propActivities)) {
         try {
           await fetchActivities();
+          initialLoadComplete.current = true;
         } catch (error) {
           if (mounted) {
             setLoading(false);
+            initialLoadComplete.current = true;
           }
         }
       } else {
         setLoading(false);
+        initialLoadComplete.current = true;
       }
     };
 
@@ -678,24 +811,25 @@ function ActivityLoggerComponent({
   const activityLoggerContent = useMemo(
     () => (
       <Card className="w-full">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <Activity className="h-5 w-5" />
+        <CardHeader className={isMobile ? "p-4" : "p-6"}>
+          <div className={`flex items-center justify-between ${isMobile ? 'flex-col gap-3' : 'flex-row'}`}>
+            <CardTitle className={`flex items-center gap-2 ${isMobile ? 'text-lg' : 'text-xl'}`}>
+              <Activity className={isMobile ? "h-4 w-4" : "h-5 w-5"} />
               Activity Log
             </CardTitle>
-            <div className="flex gap-2">
+            <div className={`flex gap-2 ${isMobile ? 'w-full flex-col' : 'flex-row'}`}>
               {activeActivity && (
                 <Button
                   onClick={handleEndActivity}
                   disabled={submitting}
                   variant="destructive"
-                  size="sm"
+                  size={isMobile ? "default" : "sm"}
+                  className={`${isMobile ? 'w-full h-12 text-base touch-manipulation' : ''}`}
                 >
                   {submitting ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    <Loader2 className={`${isMobile ? 'h-5 w-5' : 'h-4 w-4'} mr-2 animate-spin`} />
                   ) : (
-                    <Square className="h-4 w-4 mr-2" />
+                    <Square className={`${isMobile ? 'h-5 w-5' : 'h-4 w-4'} mr-2`} />
                   )}
                   End Activity
                 </Button>
@@ -717,18 +851,22 @@ function ActivityLoggerComponent({
                 }}
               >
                 <DialogTrigger asChild>
-                  <Button size="sm" disabled={!!activeActivity}>
-                    <Plus className="h-4 w-4 mr-2" />
+                  <Button 
+                    size={isMobile ? "default" : "sm"} 
+                    disabled={!!activeActivity}
+                    className={`${isMobile ? 'w-full h-12 text-base touch-manipulation' : ''}`}
+                  >
+                    <Plus className={`${isMobile ? 'h-5 w-5' : 'h-4 w-4'} mr-2`} />
                     Log Activity
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="sm:max-w-[500px]">
-                  <DialogHeader>
-                    <DialogTitle>Log New Activity</DialogTitle>
+                <DialogContent className={isMobile ? "w-[95vw] max-w-[95vw] h-[85vh] p-4" : "sm:max-w-[500px]"}>
+                  <DialogHeader className={isMobile ? "pb-4" : ""}>
+                    <DialogTitle className={isMobile ? "text-lg" : "text-xl"}>Log New Activity</DialogTitle>
                   </DialogHeader>
-                  <div className="space-y-4 py-4">
+                  <div className={`space-y-4 py-4 ${isMobile ? 'space-y-3' : 'space-y-4'}`}>
                     <div className="space-y-2">
-                      <Label htmlFor="activityType">Activity Type *</Label>
+                      <Label htmlFor="activityType" className={isMobile ? "text-sm font-medium" : ""}>Activity Type *</Label>
                       <Select
                         value={formData.activityType}
                         onValueChange={(value) =>
@@ -739,7 +877,7 @@ function ActivityLoggerComponent({
                           }))
                         }
                       >
-                        <SelectTrigger>
+                        <SelectTrigger className={isMobile ? "h-12 text-base" : "h-10"}>
                           <SelectValue placeholder="Select activity type" />
                         </SelectTrigger>
                         <SelectContent>
@@ -756,7 +894,7 @@ function ActivityLoggerComponent({
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="title">Title *</Label>
+                      <Label htmlFor="title" className={isMobile ? "text-sm font-medium" : ""}>Title *</Label>
                       <Input
                         id="title"
                         value={formData.title}
@@ -767,13 +905,14 @@ function ActivityLoggerComponent({
                           }))
                         }
                         placeholder="Brief description of the activity"
+                        className={isMobile ? "h-12 text-base" : "h-10"}
                       />
                     </div>
 
                     {/* Show tickets dropdown only for Ticket Work */}
                     {formData.activityType === "TICKET_WORK" && (
                       <div className="space-y-2">
-                        <Label htmlFor="ticketId">Ticket</Label>
+                        <Label htmlFor="ticketId" className={isMobile ? "text-sm font-medium" : ""}>Ticket</Label>
                         <Select
                           value={formData.ticketId}
                           onValueChange={(value) =>
@@ -783,7 +922,7 @@ function ActivityLoggerComponent({
                             }))
                           }
                         >
-                          <SelectTrigger>
+                          <SelectTrigger className={isMobile ? "h-12 text-base" : "h-10"}>
                             <SelectValue placeholder="Select active ticket" />
                           </SelectTrigger>
                           <SelectContent>
@@ -847,7 +986,7 @@ function ActivityLoggerComponent({
 
                     {/* Location Status Section */}
                     <div className="space-y-2">
-                      <Label>Activity Location</Label>
+                      <Label className={isMobile ? "text-sm font-medium" : ""}>Activity Location</Label>
                       <div
                         className={`p-3 rounded-lg border-2 transition-all duration-300 ${
                           activityLocation
@@ -917,18 +1056,18 @@ function ActivityLoggerComponent({
                             <Button
                               onClick={getCurrentLocationForActivity}
                               disabled={locationLoading}
-                              size="sm"
+                              size={isMobile ? "default" : "sm"}
                               variant="outline"
-                              className="text-xs"
+                              className={`${isMobile ? 'w-full h-10 text-base touch-manipulation' : 'text-xs'}`}
                             >
                               {locationLoading ? (
                                 <>
-                                  <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                                  <Loader2 className={`${isMobile ? 'h-4 w-4' : 'h-3 w-3'} animate-spin mr-1`} />
                                   Getting...
                                 </>
                               ) : (
                                 <>
-                                  <MapPin className="h-3 w-3 mr-1" />
+                                  <MapPin className={`${isMobile ? 'h-4 w-4' : 'h-3 w-3'} mr-1`} />
                                   Get Location
                                 </>
                               )}
@@ -938,22 +1077,24 @@ function ActivityLoggerComponent({
                       </div>
                     </div>
 
-                    <div className="flex justify-end gap-2 pt-4">
+                    <div className={`flex gap-2 pt-4 ${isMobile ? 'flex-col' : 'justify-end flex-row'}`}>
                       <Button
                         variant="outline"
                         onClick={() => setDialogOpen(false)}
                         disabled={submitting}
+                        className={`${isMobile ? 'w-full h-12 text-base order-2 touch-manipulation' : ''}`}
                       >
                         Cancel
                       </Button>
                       <Button
                         onClick={handleStartActivity}
                         disabled={submitting}
+                        className={`${isMobile ? 'w-full h-12 text-base order-1 touch-manipulation' : ''}`}
                       >
                         {submitting ? (
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          <Loader2 className={`${isMobile ? 'h-5 w-5' : 'h-4 w-4'} mr-2 animate-spin`} />
                         ) : (
-                          <Play className="h-4 w-4 mr-2" />
+                          <Play className={`${isMobile ? 'h-5 w-5' : 'h-4 w-4'} mr-2`} />
                         )}
                         Start Activity
                       </Button>
@@ -964,12 +1105,12 @@ function ActivityLoggerComponent({
             </div>
           </div>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className={`space-y-4 ${isMobile ? 'p-4' : 'p-6'}`}>
           {/* Active Activity */}
           {activeActivity && (
-            <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
+            <div className={`${isMobile ? 'p-3' : 'p-4'} bg-green-50 border border-green-200 rounded-lg`}>
+              <div className={`flex items-center justify-between mb-2 ${isMobile ? 'flex-col gap-2' : 'flex-row'}`}>
+                <div className={`flex items-center gap-2 ${isMobile ? 'flex-wrap' : ''}`}>
                   <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                   <Badge
                     variant="outline"
@@ -977,21 +1118,21 @@ function ActivityLoggerComponent({
                   >
                     {formatDuration(undefined, true, activeActivity.startTime)}
                   </Badge>
-                  <span className="text-sm font-medium">
+                  <span className={`${isMobile ? 'text-base' : 'text-sm'} font-medium`}>
                     {getActivityTypeInfo(activeActivity.activityType).icon}
                   </span>
-                  <span className="text-sm font-medium">
+                  <span className={`${isMobile ? 'text-base' : 'text-sm'} font-medium`}>
                     {getActivityTypeInfo(activeActivity.activityType).label}
                   </span>
                 </div>
-                <span className="text-sm text-muted-foreground">
+                <span className={`${isMobile ? 'text-sm' : 'text-sm'} text-muted-foreground ${isMobile ? 'w-full text-center' : ''}`}>
                   Started{" "}
                   {new Date(activeActivity.startTime).toLocaleTimeString()}
                 </span>
               </div>
-              <h4 className="font-medium">{activeActivity.title}</h4>
+              <h4 className={`font-medium ${isMobile ? 'text-base' : 'text-sm'}`}>{activeActivity.title}</h4>
               {activeActivity.description && (
-                <p className="text-sm text-muted-foreground mt-1">
+                <p className={`${isMobile ? 'text-sm' : 'text-sm'} text-muted-foreground mt-1`}>
                   {activeActivity.description}
                 </p>
               )}
@@ -1060,38 +1201,55 @@ function ActivityLoggerComponent({
           )}
 
           {/* Recent Activities */}
-          <div className="space-y-3">
-            <h4 className="text-sm font-medium text-muted-foreground">
-              Recent Activities ({activities.length} total)
-            </h4>
-            {loading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin" />
-                <p className="text-sm text-muted-foreground mt-2">
-                  Loading activities...
-                </p>
-              </div>
-            ) : !Array.isArray(activities) || activities.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <Activity className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                <p>No activities logged yet</p>
-              </div>
-            ) : (
-              activities
-                .filter((activity) => activity.id !== activeActivity?.id)
-                .map((activity) => {
+          <div className={`space-y-3 ${isMobile ? 'space-y-2' : 'space-y-3'}`}>
+            {(() => {
+              // Filter activities for today and yesterday only
+              const now = new Date();
+              const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+              const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
+              
+              const recentActivities = activities.filter((activity) => {
+                // Exclude active activity
+                if (activity.id === activeActivity?.id) return false;
+                
+                // Filter for today and yesterday only
+                const activityDate = new Date(activity.startTime);
+                return activityDate >= yesterday;
+              });
+
+              return (
+                <>
+                  <h4 className={`${isMobile ? 'text-base' : 'text-sm'} font-medium text-muted-foreground`}>
+                    Recent Activities - Today & Yesterday ({recentActivities.length} activities)
+                  </h4>
+                  {loading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="h-6 w-6 animate-spin" />
+                      <p className="text-sm text-muted-foreground mt-2">
+                        Loading activities...
+                      </p>
+                    </div>
+                  ) : recentActivities.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <Activity className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                      <p>No recent activities (today & yesterday)</p>
+                    </div>
+                  ) : (
+                    recentActivities
+                      .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime()) // Most recent first
+                      .map((activity) => {
                   const isOngoing = !activity.endTime || activity.endTime === null || activity.endTime === '';
                   return (
                     <div
                       key={activity.id}
-                      className="p-3 border rounded-lg hover:bg-gray-50"
+                      className={`${isMobile ? 'p-3' : 'p-3'} border rounded-lg hover:bg-gray-50 touch-manipulation`}
                     >
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm">
+                      <div className={`flex items-center justify-between mb-2 ${isMobile ? 'flex-col gap-2' : 'flex-row'}`}>
+                        <div className={`flex items-center gap-2 ${isMobile ? 'flex-wrap w-full justify-center' : ''}`}>
+                          <span className={isMobile ? "text-base" : "text-sm"}>
                             {getActivityTypeInfo(activity.activityType).icon}
                           </span>
-                          <Badge variant="outline" className="text-xs">
+                          <Badge variant="outline" className={isMobile ? "text-sm" : "text-xs"}>
                             {getActivityTypeInfo(activity.activityType).label}
                           </Badge>
                           {isOngoing ? (
@@ -1107,19 +1265,19 @@ function ActivityLoggerComponent({
                             </Badge>
                           )}
                         </div>
-                        <span className="text-xs text-muted-foreground">
+                        <span className={`${isMobile ? 'text-sm w-full text-center' : 'text-xs'} text-muted-foreground`}>
                           {new Date(activity.startTime).toLocaleDateString()}
                         </span>
                       </div>
-                      <h5 className="text-sm font-medium">{activity.title}</h5>
+                      <h5 className={`${isMobile ? 'text-base' : 'text-sm'} font-medium ${isMobile ? 'text-center' : ''}`}>{activity.title}</h5>
                       {activity.description && (
-                        <p className="text-xs text-muted-foreground mt-1">
+                        <p className={`${isMobile ? 'text-sm text-center' : 'text-xs'} text-muted-foreground mt-1`}>
                           {activity.description}
                         </p>
                       )}
-                      <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+                      <div className={`flex items-center gap-4 mt-2 text-muted-foreground ${isMobile ? 'flex-col gap-2 text-sm' : 'text-xs flex-row'}`}>
                         <div className="flex items-center gap-1">
-                          <Clock className="h-3 w-3" />
+                          <Clock className={isMobile ? "h-4 w-4" : "h-3 w-3"} />
                           <span>
                             {new Date(activity.startTime).toLocaleTimeString()}
                           </span>
@@ -1133,8 +1291,8 @@ function ActivityLoggerComponent({
                         </div>
                         {activity.location && (
                           <div className="flex items-center gap-1">
-                            <MapPin className="h-3 w-3" />
-                            <span className="truncate max-w-[200px]">
+                            <MapPin className={isMobile ? "h-4 w-4" : "h-3 w-3"} />
+                            <span className={`truncate ${isMobile ? 'max-w-[250px]' : 'max-w-[200px]'}`}>
                               {activity.location}
                             </span>
                           </div>
@@ -1191,8 +1349,11 @@ function ActivityLoggerComponent({
                       )}
                     </div>
                   );
-                })
-            )}
+                      })
+                  )}
+                </>
+              );
+            })()}
           </div>
         </CardContent>
       </Card>

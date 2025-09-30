@@ -40,9 +40,14 @@ export async function getZones(): Promise<Zone[]> {
   }
 }
 
-export async function getCustomers(): Promise<Customer[]> {
+export async function getCustomers(zoneId?: string): Promise<Customer[]> {
   try {
-    const response = await makeServerRequest('/customers?isActive=true');
+    const params = new URLSearchParams({ isActive: 'true' });
+    if (zoneId) {
+      params.append('serviceZoneId', zoneId);
+    }
+    
+    const response = await makeServerRequest(`/customers?${params.toString()}`);
     return Array.isArray(response) 
       ? response 
       : (response.data || response.customers || []);
@@ -64,9 +69,11 @@ export async function getAssets(customerId?: string): Promise<Asset[]> {
   }
 }
 
-export async function generateReport(params: {
-  from?: string;
-  to?: string;
+export async function generateReport(filters: {
+  dateRange?: {
+    from?: Date;
+    to?: Date;
+  };
   zoneId?: string;
   customerId?: string;
   assetId?: string;
@@ -75,14 +82,37 @@ export async function generateReport(params: {
   try {
     const searchParams = new URLSearchParams();
     
-    Object.entries(params).forEach(([key, value]) => {
-      if (value && value !== 'all') {
-        searchParams.append(key, value);
-      }
-    });
+    // Add report type
+    if (filters.reportType) {
+      searchParams.append('reportType', filters.reportType);
+    }
+    
+    // Add date range
+    if (filters.dateRange?.from) {
+      searchParams.append('from', filters.dateRange.from.toISOString().split('T')[0]);
+      searchParams.append('startDate', filters.dateRange.from.toISOString());
+    }
+    if (filters.dateRange?.to) {
+      searchParams.append('to', filters.dateRange.to.toISOString().split('T')[0]);
+      searchParams.append('endDate', filters.dateRange.to.toISOString());
+    }
+    
+    // Add optional filters
+    if (filters.zoneId) {
+      searchParams.append('zoneId', filters.zoneId);
+    }
+    if (filters.customerId) {
+      searchParams.append('customerId', filters.customerId);
+    }
+    if (filters.assetId) {
+      searchParams.append('assetId', filters.assetId);
+    }
 
-    const response = await makeServerRequest(`/reports/general?${searchParams.toString()}`);
-    return response || null;
+    const response = await makeServerRequest(`/reports/generate?${searchParams.toString()}`);
+    
+    // Handle different response structures
+    const data = response?.data || response || {};
+    return data;
   } catch (error) {
     console.error('Error generating report:', error);
     return null;
@@ -187,6 +217,23 @@ export async function getServicePersonReportsSummary(params: {
     return null;
   } catch (error) {
     console.error('Error fetching service person reports summary:', error);
+    return null;
+  }
+}
+
+// Get zone user's zone information
+export async function getUserZone(): Promise<{ id: number; name: string } | null> {
+  try {
+    const response = await makeServerRequest('/zone-dashboard');
+    if (response?.zone) {
+      return {
+        id: response.zone.id,
+        name: response.zone.name
+      };
+    }
+    return null;
+  } catch (error) {
+    console.error('Error fetching user zone:', error);
     return null;
   }
 }

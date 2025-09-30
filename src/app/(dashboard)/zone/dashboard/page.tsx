@@ -1,6 +1,7 @@
-'use server';
-
 import { Suspense } from 'react';
+
+// Force dynamic rendering for this page
+export const dynamic = 'force-dynamic';
 import { DashboardErrorBoundary } from '@/components/dashboard/DashboardErrorBoundary';
 import DashboardErrorFallback from '@/components/dashboard/DashboardErrorFallback';
 import { getAllZoneDashboardData } from '@/lib/server/dashboard';
@@ -8,6 +9,36 @@ import { redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
 import type { ZoneDashboardData } from '@/lib/server/dashboard';
 import ZoneDashboardClient from '@/components/dashboard/zone/ZoneDashboardClient';
+
+// Client-side redirect component to prevent NEXT_REDIRECT errors during prefetching
+function ClientRedirect({ role }: { role: string }) {
+  return (
+    <script
+      dangerouslySetInnerHTML={{
+        __html: `
+          (function() {
+            const role = '${role}';
+            let redirectPath = '/auth/login';
+            
+            switch (role) {
+              case 'ADMIN':
+              case 'SUPER_ADMIN':
+                redirectPath = '/admin/dashboard';
+                break;
+              case 'SERVICE_PERSON':
+                redirectPath = '/service-person/dashboard';
+                break;
+            }
+            
+            if (typeof window !== 'undefined') {
+              window.location.href = redirectPath;
+            }
+          })();
+        `
+      }}
+    />
+  );
+}
 
 // Loading component for Suspense boundary
 function ZoneDashboardLoading() {
@@ -26,19 +57,31 @@ export default async function ZoneDashboardPage() {
   try {
     const cookieStore = cookies();
     const userRole = cookieStore.get('userRole')?.value;
+    const accessToken = cookieStore.get('accessToken')?.value;
+    const token = cookieStore.get('token')?.value;
     
-    if (!userRole) {
+    console.log('Zone Dashboard - User role:', userRole, 'Has token:', !!(accessToken || token));
+    
+    // Check if user is authenticated
+    if (!userRole || (!accessToken && !token)) {
+      console.log('Zone Dashboard - No authentication, redirecting to login');
       redirect('/auth/login');
     }
 
-    // Check if user has access to zone dashboard (case-insensitive check)
-    const normalizedUserRole = userRole.toLowerCase();
-    if (!['zone_user', 'admin', 'super_admin'].includes(normalizedUserRole)) {
-      redirect('/auth/unauthorized');
+    // Check if user has access to zone dashboard - ONLY ZONE_USER should access this
+    const normalizedUserRole = userRole.toUpperCase();
+    if (normalizedUserRole !== 'ZONE_USER') {
+      console.log('Zone Dashboard - Unauthorized role:', userRole, 'redirecting to appropriate dashboard');
+      
+      // Return a client-side redirect component instead of server-side redirect
+      // This prevents NEXT_REDIRECT errors during prefetching
+      return <ClientRedirect role={normalizedUserRole} />;
     }
 
     // Fetch initial data on the server
+    console.log('Zone Dashboard - Attempting to fetch data...');
     const { zoneDashboardData } = await getAllZoneDashboardData();
+    console.log('Zone Dashboard - Data fetched successfully:', !!zoneDashboardData);
 
     // Ensure we have safe default values
     const safeZoneDashboardData: ZoneDashboardData = zoneDashboardData || {
@@ -55,7 +98,7 @@ export default async function ZoneDashboardPage() {
         unassignedTickets: { count: 0, critical: false },
         inProgressTickets: { count: 0, change: 0 },
         avgResponseTime: { hours: 0, minutes: 0, change: 0, isPositive: false },
-        avgResolutionTime: { days: 0, hours: 0, change: 0, isPositive: false },
+        avgResolutionTime: { days: 0, hours: 0, minutes: 0, change: 0, isPositive: false },
         avgDowntime: { hours: 0, minutes: 0, change: 0, isPositive: false },
         monthlyTickets: { count: 0, change: 0 },
         activeMachines: { count: 0, change: 0 }

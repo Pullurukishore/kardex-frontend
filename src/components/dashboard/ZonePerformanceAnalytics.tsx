@@ -37,8 +37,8 @@ interface ZonePerformanceAnalyticsProps {
 
 // Helper function to get real zone-specific resolution time from backend data
 const getZoneResolutionTime = (zone: any) => {
-  // Use real backend data if available, otherwise fallback to reasonable default
-  return zone.avgResolutionTimeHours || 24; // Default to 24 hours if no data
+  // Use real backend data if available, otherwise return 0 for no data
+  return zone.avgResolutionTimeHours || 0; // Return 0 if no data available
 };
 
 // Helper function to format resolution time
@@ -56,6 +56,7 @@ const formatResolutionTime = (hours: number) => {
 
 // Helper function to get resolution time performance level
 const getResolutionTimePerformance = (hours: number) => {
+  if (hours === 0) return { level: 'No Data', color: 'bg-gray-500', bgClass: 'bg-gray-100 text-gray-800' };
   if (hours <= 24) return { level: 'Excellent', color: 'bg-green-500', bgClass: 'bg-green-100 text-green-800' };
   if (hours <= 48) return { level: 'Good', color: 'bg-yellow-500', bgClass: 'bg-yellow-100 text-yellow-800' };
   return { level: 'Needs Improvement', color: 'bg-red-500', bgClass: 'bg-red-100 text-red-800' };

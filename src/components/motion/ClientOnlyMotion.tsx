@@ -3,39 +3,38 @@
 import { forwardRef, useEffect, useState } from 'react';
 import { motion, HTMLMotionProps, MotionProps } from 'framer-motion';
 
-type ClientOnlyMotionProps<T extends keyof JSX.IntrinsicElements = 'div'> = {
-  as?: T;
-  children?: React.ReactNode;
-} & Omit<HTMLMotionProps<T>, keyof MotionProps> &
+type ClientOnlyMotionProps = HTMLMotionProps<'div'> &
   MotionProps & {
-    // Add any additional props specific to your component
+    as?: keyof JSX.IntrinsicElements;
+    // Additional props
     className?: string;
+    children?: React.ReactNode;
   };
 
-function ClientOnlyMotionInner<T extends keyof JSX.IntrinsicElements = 'div'>(
-  { as: Tag = 'div' as T, ...props }: ClientOnlyMotionProps<T>,
-  ref: React.ForwardedRef<HTMLElement>
+function ClientOnlyMotionInner(
+  { as: Tag = 'div', ...props }: ClientOnlyMotionProps,
+  ref: React.ForwardedRef<any>
 ) {
   const [mounted, setMounted] = useState(false);
-  const MotionComponent = motion[Tag as keyof typeof motion] || motion.div;
+  const MotionComponent = (motion as any)[Tag as any] || motion.div;
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
   if (!mounted) {
-    const Element = Tag as keyof JSX.IntrinsicElements;
-    return <Element ref={ref} {...props as any} />;
+    const Element: any = Tag as any;
+    return <Element ref={ref} {...(props as any)} />;
   }
 
-  return <MotionComponent ref={ref} {...props as any} />;
+  return <MotionComponent ref={ref} {...(props as any)} />;
 }
 
 // Create the forwarded ref component
-const ClientOnlyMotion = forwardRef(ClientOnlyMotionInner) as <T extends keyof JSX.IntrinsicElements = 'div'>(
-  props: ClientOnlyMotionProps<T> & { ref?: React.ForwardedRef<HTMLElement> }
+const ClientOnlyMotion = forwardRef(ClientOnlyMotionInner) as unknown as (
+  props: ClientOnlyMotionProps & { ref?: React.ForwardedRef<any> }
 ) => React.ReactElement;
 
-ClientOnlyMotion.displayName = 'ClientOnlyMotion';
+(ClientOnlyMotion as any).displayName = 'ClientOnlyMotion';
 
 export default ClientOnlyMotion;

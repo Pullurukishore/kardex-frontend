@@ -10,18 +10,15 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/components/ui/use-toast';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Package, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 
 const assetFormSchema = z.object({
-  machineId: z.string().min(1, 'Machine ID is required'),
-  model: z.string().min(1, 'Model is required'),
-  serialNo: z.string().min(1, 'Serial number is required'),
+  model: z.string().optional(),
+  serialNo: z.string().optional(),
   location: z.string().optional(),
-  status: z.enum(['ACTIVE', 'INACTIVE', 'MAINTENANCE', 'DECOMMISSIONED']).default('ACTIVE'),
-  notes: z.string().optional(),
+  status: z.enum(['ACTIVE', 'INACTIVE', 'MAINTENANCE']).default('ACTIVE'),
 });
 
 type AssetFormValues = z.infer<typeof assetFormSchema>;
@@ -42,26 +39,46 @@ export default function AddAssetPage() {
   const onSubmit = async (values: AssetFormValues) => {
     try {
       setIsLoading(true);
-      const { data } = await apiClient.post<{ message: string }>('/assets', {
+      console.log('Submitting asset data:', { ...values, customerId: Number(id) });
+      
+      const response = await apiClient.post('/assets', {
         ...values,
-        customerId: Number(id),
+        customerId: Number(id)
       });
-
+      
+      console.log('Full response:', response);
+      console.log('Asset creation response data:', response.data);
+      
+      // apiClient returns data directly, not wrapped in axios response
+      const data = response.data || response || {};
+      
       toast({
         title: 'Success',
-        description: 'Asset added successfully',
+        description: `Asset added successfully${data.machineId ? ` with Machine ID: ${data.machineId}` : ''}`,
       });
 
-      router.push(`/admin/customers/${id}`);
-    } catch (error: unknown) {
+      // Small delay to ensure toast is shown before redirect
+      setTimeout(() => {
+        console.log('Redirecting to:', `/admin/customers/${id}`);
+        try {
+          router.push(`/admin/customers/${id}`);
+        } catch (redirectError) {
+          console.error('Redirect error:', redirectError);
+          // Fallback: use window.location
+          window.location.href = `/admin/customers/${id}`;
+        }
+      }, 1500);
+
+    } catch (error: any) {
       console.error('Error adding asset:', error);
       let errorMessage = 'Failed to add asset. Please try again.';
       
-      if (error && typeof error === 'object' && 'response' in error) {
-        const axiosError = error as { response?: { data?: { message?: string } } };
-        if (axiosError.response?.data?.message) {
-          errorMessage = axiosError.response.data.message;
-        }
+      if (error?.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error?.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      } else if (error?.message) {
+        errorMessage = error.message;
       }
       
       toast({
@@ -87,33 +104,24 @@ export default function AddAssetPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Add New Asset</CardTitle>
-          <CardDescription>Add a new asset for this customer</CardDescription>
+          <div className="flex items-center space-x-2">
+            <Package className="h-6 w-6 text-blue-600" />
+            <CardTitle>Add New Asset</CardTitle>
+          </div>
+          <CardDescription>
+            Add a new asset for this customer. Machine ID will be auto-generated.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <FormField
-                  control={form.control}
-                  name="machineId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Machine ID *</FormLabel>
-                      <FormControl>
-                        <Input placeholder="MACH-001" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <FormField
                   control={form.control}
                   name="model"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Model *</FormLabel>
+                      <FormLabel>Model</FormLabel>
                       <FormControl>
                         <Input placeholder="Model XYZ-2000" {...field} />
                       </FormControl>
@@ -127,9 +135,27 @@ export default function AddAssetPage() {
                   name="serialNo"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Serial Number *</FormLabel>
+                      <FormLabel>Serial Number</FormLabel>
                       <FormControl>
-                        <Input placeholder="SN123456789" {...field} />
+                        <Input 
+                          placeholder="SN123456789" 
+                          {...field} 
+                          className="font-mono"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="location"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Location</FormLabel>
+                      <FormControl>
+                        <Input placeholder="e.g., Main Office, Warehouse A" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -149,48 +175,16 @@ export default function AddAssetPage() {
                         <option value="ACTIVE">Active</option>
                         <option value="INACTIVE">Inactive</option>
                         <option value="MAINTENANCE">Maintenance</option>
-                        <option value="DECOMMISSIONED">Decommissioned</option>
                       </select>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
 
-
-                <FormField
-                  control={form.control}
-                  name="location"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Location</FormLabel>
-                      <FormControl>
-                        <Input placeholder="e.g., Main Office, Warehouse A" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
               </div>
 
-              <FormField
-                control={form.control}
-                name="notes"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Notes</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        placeholder="Additional notes about this asset..."
-                        className="resize-none"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
 
-              <div className="flex justify-end space-x-4 pt-4">
+              <div className="flex justify-end space-x-4 pt-6 border-t">
                 <Button
                   type="button"
                   variant="outline"
@@ -200,7 +194,14 @@ export default function AddAssetPage() {
                   Cancel
                 </Button>
                 <Button type="submit" disabled={isLoading}>
-                  {isLoading ? 'Adding...' : 'Add Asset'}
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Adding...
+                    </>
+                  ) : (
+                    'Add Asset'
+                  )}
                 </Button>
               </div>
             </form>

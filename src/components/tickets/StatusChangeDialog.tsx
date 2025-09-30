@@ -9,6 +9,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { StatusBadge } from './StatusBadge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { apiClient } from '@/lib/api/api-client';
 import { 
   ArrowRight, 
   AlertTriangle, 
@@ -333,25 +334,34 @@ export function StatusChangeDialog({
       const position = await new Promise<GeolocationPosition>((resolve, reject) => {
         navigator.geolocation.getCurrentPosition(resolve, reject, {
           enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 60000
+          timeout: 30000, // Increased timeout for better accuracy
+          maximumAge: 0 // No cache - always get fresh location
         });
       });
+      
+      console.log('StatusChangeDialog GPS Accuracy:', position.coords.accuracy, 'meters');
+      
+      // Check if accuracy is good enough (less than 30 meters)
+      if (position.coords.accuracy > 30) {
+        console.warn('StatusChangeDialog: GPS accuracy is poor:', position.coords.accuracy, 'meters');
+      }
 
       const { latitude, longitude } = position.coords;
       
-      // Try to get address from coordinates (reverse geocoding)
+      // Try to get address from coordinates using backend geocoding service
       let address = '';
       try {
-        const response = await fetch(
-          `https://api.opencagedata.com/geocode/v1/json?q=${latitude}+${longitude}&key=YOUR_API_KEY`
-        );
-        if (response.ok) {
-          const data = await response.json();
-          address = data.results[0]?.formatted || '';
+        console.log('StatusChangeDialog: Calling backend geocoding service...');
+        const response = await apiClient.get(`/geocoding/reverse?latitude=${latitude}&longitude=${longitude}`);
+        
+        if (response.data?.success && response.data?.data?.address) {
+          address = response.data.data.address;
+          console.log('StatusChangeDialog: Backend geocoding successful:', address);
+        } else {
+          console.log('StatusChangeDialog: Backend geocoding returned no address');
         }
       } catch (geocodeError) {
-        console.warn('Failed to get address from coordinates:', geocodeError);
+        console.warn('StatusChangeDialog: Backend geocoding failed:', geocodeError);
       }
 
       setCurrentLocation({
@@ -424,7 +434,7 @@ export function StatusChangeDialog({
       [TicketStatus.ONSITE_VISIT]: { label: 'Onsite Visit', shortLabel: 'Onsite', category: 'Onsite', description: 'Requires onsite visit' },
       [TicketStatus.ONSITE_VISIT_PLANNED]: { label: 'Visit Planned', shortLabel: 'Visit Planned', category: 'Onsite', description: 'Onsite visit is scheduled' },
       [TicketStatus.ONSITE_VISIT_STARTED]: { label: 'Visit Started', shortLabel: 'Visit Started', category: 'Onsite', description: 'Technician started journey' },
-      [TicketStatus.ONSITE_VISIT_REACHED]: { label: 'Visit Reached', shortLabel: 'Reached Site', category: 'Onsite', description: 'Technician reached location' },
+      [TicketStatus.ONSITE_VISIT_REACHED]: { label: 'Visit Reached', shortLabel: 'Reached Site', category: 'Onsite', description: 'Technician reached location (auto-transitions to In Progress)' },
       [TicketStatus.ONSITE_VISIT_IN_PROGRESS]: { label: 'Visit In Progress', shortLabel: 'Work Onsite', category: 'Onsite', description: 'Work in progress at site' },
       [TicketStatus.ONSITE_VISIT_RESOLVED]: { label: 'Visit Resolved', shortLabel: 'Site Resolved', category: 'Onsite', description: 'Onsite work completed' },
       [TicketStatus.ONSITE_VISIT_PENDING]: { label: 'Visit Pending', shortLabel: 'Site Pending', category: 'Onsite', description: 'Onsite visit paused' },
@@ -493,6 +503,25 @@ export function StatusChangeDialog({
 
       // Call onStatusChange with location data
       await onStatusChange(selectedStatus, comments || undefined, locationData);
+      
+      // Auto-transition from ONSITE_VISIT_REACHED to ONSITE_VISIT_IN_PROGRESS
+      if (selectedStatus === TicketStatus.ONSITE_VISIT_REACHED) {
+        try {
+          // Wait a moment for the first status change to be processed
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          // Automatically transition to in progress
+          await onStatusChange(
+            TicketStatus.ONSITE_VISIT_IN_PROGRESS, 
+            'Automatically transitioned to in progress after reaching site',
+            locationData
+          );
+        } catch (error) {
+          console.error('Error in automatic status transition:', error);
+          // Don't show error to user as the main status change was successful
+        }
+      }
+      
       handleClose();
     } finally {
       setIsSubmitting(false);
@@ -677,10 +706,23 @@ export function StatusChangeDialog({
                       <Badge variant="outline" className="text-xs px-2 py-0 h-5">
                         {selectedOption.category}
                       </Badge>
+                      {selectedStatus === TicketStatus.ONSITE_VISIT_REACHED && (
+                        <Badge variant="secondary" className="text-xs px-2 py-0 h-5 bg-blue-100 text-blue-700">
+                          Auto-Transition
+                        </Badge>
+                      )}
                     </div>
                     <p className="text-sm text-muted-foreground">
                       {selectedOption.description}
                     </p>
+                    {selectedStatus === TicketStatus.ONSITE_VISIT_REACHED && (
+                      <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded-md">
+                        <p className="text-xs text-blue-700 font-medium flex items-center gap-1">
+                          <ArrowRight className="h-3 w-3" />
+                          Will automatically change to "Visit In Progress" after reaching site
+                        </p>
+                      </div>
+                    )}
                     {selectedOption.isDestructive && (
                       <p className="text-xs text-destructive mt-1 font-medium">
                         ⚠️ This action cannot be undone

@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { 
   ArrowLeft, 
-  Edit, 
+  Pencil, 
   Users, 
   MapPin, 
   BarChart3, 
@@ -152,7 +152,7 @@ export default function ServiceZoneDetailPage() {
             {zone.isActive ? 'Active' : 'Inactive'}
           </Badge>
           <Button onClick={() => router.push(`/admin/service-zones/${zone.id}/edit`)}>
-            <Edit className="mr-2 h-4 w-4" />
+            <Pencil className="mr-2 h-4 w-4" />
             Edit
           </Button>
         </div>

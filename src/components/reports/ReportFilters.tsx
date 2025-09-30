@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
-import { RefreshCw, Calendar } from 'lucide-react';
+import { SearchableSelect } from '@/components/ui/SearchableSelect';
+import { RefreshCw, Calendar, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { DateRange } from 'react-day-picker';
 import type { ReportFilters as ReportFiltersType } from './types';
@@ -14,6 +15,9 @@ interface ReportFiltersProps {
   customers: Customer[];
   assets: Asset[];
   onFiltersChange?: (filters: ReportFiltersType) => void;
+  isLoadingCustomers?: boolean;
+  isLoadingAssets?: boolean;
+  isZoneUser?: boolean;
 }
 
 export function ReportFilters({
@@ -21,7 +25,10 @@ export function ReportFilters({
   zones,
   customers,
   assets,
-  onFiltersChange
+  onFiltersChange,
+  isLoadingCustomers = false,
+  isLoadingAssets = false,
+  isZoneUser = false
 }: ReportFiltersProps) {
   const [localFilters, setLocalFilters] = useState<ReportFiltersType>(filters);
 
@@ -87,12 +94,13 @@ export function ReportFilters({
         <Select 
           value={localFilters.zoneId || ''}
           onValueChange={(value) => handleFilterChange('zoneId', value || undefined)}
+          disabled={isZoneUser}
         >
           <SelectTrigger>
             <SelectValue placeholder="All zones" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">All zones</SelectItem>
+            {!isZoneUser && <SelectItem value="">All zones</SelectItem>}
             {zones.map((zone) => (
               <SelectItem key={zone.id} value={zone.id}>
                 {zone.name}
@@ -106,43 +114,39 @@ export function ReportFilters({
         <>
           <div className="space-y-1">
             <label className="text-sm font-medium text-foreground">Customer</label>
-            <Select 
+            <SearchableSelect
+              options={customers.map((customer) => ({
+                id: customer.id,
+                label: customer.companyName,
+                searchText: customer.companyName
+              }))}
               value={localFilters.customerId || ''}
               onValueChange={(value) => handleFilterChange('customerId', value || undefined)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="All customers" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="">All customers</SelectItem>
-                {customers.map((customer) => (
-                  <SelectItem key={customer.id} value={customer.id}>
-                    {customer.companyName}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              placeholder="Select customer..."
+              emptyText={isLoadingCustomers ? "Loading customers..." : "No customers found for selected zone"}
+              loading={isLoadingCustomers}
+              disabled={isLoadingCustomers}
+              maxHeight="250px"
+            />
           </div>
 
           {localFilters.customerId && (
             <div className="space-y-1">
               <label className="text-sm font-medium text-foreground">Asset</label>
-              <Select 
+              <SearchableSelect
+                options={assets.map((asset) => ({
+                  id: asset.id,
+                  label: asset.serialNo || asset.name || `Asset ${asset.id}`,
+                  searchText: `${asset.serialNo || ''}  || ${asset.name || ''} ${asset.model || ''}`.trim()
+                }))}
                 value={localFilters.assetId || ''}
                 onValueChange={(value) => handleFilterChange('assetId', value || undefined)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="All assets" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">All assets</SelectItem>
-                  {assets.map((asset) => (
-                    <SelectItem key={asset.id} value={asset.id}>
-                      {asset.name || `Asset ${asset.id}`}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                placeholder="Select asset..."
+                emptyText={isLoadingAssets ? "Loading assets..." : "No assets found for selected customer"}
+                loading={isLoadingAssets}
+                disabled={isLoadingAssets}
+                maxHeight="250px"
+              />
             </div>
           )}
         </>

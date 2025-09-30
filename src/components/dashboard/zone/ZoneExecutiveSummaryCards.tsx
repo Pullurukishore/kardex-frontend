@@ -40,7 +40,7 @@ interface ZoneExecutiveSummaryCardsProps {
       unassignedTickets: { count: number; critical: boolean };
       inProgressTickets: { count: number; change: number };
       avgResponseTime: { hours: number; minutes: number; change: number; isPositive: boolean };
-      avgResolutionTime: { days: number; hours: number; change: number; isPositive: boolean };
+      avgResolutionTime: { days: number; hours: number; minutes: number; change: number; isPositive: boolean };
       avgDowntime: { hours: number; minutes: number; change: number; isPositive: boolean };
       monthlyTickets: { count: number; change: number };
       activeMachines: { count: number; change: number };
@@ -119,7 +119,7 @@ export default function ZoneExecutiveSummaryCards({
     },
     {
       title: 'Avg Resolution Time',
-      value: `${stats?.avgResolutionTime?.days || 0}d ${stats?.avgResolutionTime?.hours || 0}h`,
+      value: `${stats?.avgResolutionTime?.days || 0}d ${stats?.avgResolutionTime?.hours || 0}h ${stats?.avgResolutionTime?.minutes || 0}m`,
       description: 'Time to ticket resolution',
       change: Number(stats?.avgResolutionTime?.change ?? 0),
       isPositive: stats?.avgResolutionTime?.isPositive !== false,

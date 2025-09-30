@@ -23,7 +23,7 @@ export function isRouteAccessible(route: string, userRole?: UserRole): boolean {
 
   // Role-based route access
   const roleRoutes: Record<UserRole, string[]> = {
-    [UserRole.ADMIN]: ['/admin', '/api/admin', '/admin/FSA'],
+    [UserRole.ADMIN]: ['/admin', '/api/admin', '/admin/FSA', '/api/assets', '/api/customers'],
     [UserRole.SERVICE_PERSON]: ['/service-person', '/api/service-person'],
     [UserRole.ZONE_USER]: ['/zone', '/api/zone'],
   };

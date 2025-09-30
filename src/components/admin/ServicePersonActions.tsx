@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Edit, Trash2, Eye, MoreHorizontal } from 'lucide-react';
+import { Pencil, Trash2, Eye, MoreHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -86,7 +86,7 @@ export function ServicePersonActions({ person, onRefresh }: ServicePersonActions
           </DropdownMenuItem>
           <DropdownMenuItem asChild>
             <Link href={`/admin/service-person/${person.id}/edit`} className="flex items-center">
-              <Edit className="mr-2 h-4 w-4 text-green-500" />
+              <Pencil className="mr-2 h-4 w-4 text-green-500" />
               Edit
             </Link>
           </DropdownMenuItem>

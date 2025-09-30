@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { 
   ArrowLeft, 
   Building2, 
-  Edit, 
+  Pencil, 
   MapPin, 
   Phone, 
   Mail, 
@@ -131,7 +131,12 @@ export default function CustomerDetailPage() {
     <div className="space-y-6">
       <div className="flex flex-col space-y-4 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
         <div className="flex items-center space-x-4">
-          <Button variant="ghost" onClick={() => router.back()} className="p-2">
+          <Button 
+            variant="ghost" 
+            onClick={() => router.push('/admin/customers')} 
+            className="p-2"
+            title="Back to Customers"
+          >
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>
@@ -147,7 +152,7 @@ export default function CustomerDetailPage() {
             onClick={() => router.push(`/admin/customers/${id}/edit`)}
             className="bg-white hover:bg-gray-50"
           >
-            <Edit className="mr-2 h-4 w-4" /> Edit
+            <Pencil className="mr-2 h-4 w-4" /> Edit
           </Button>
           <Button 
             variant="destructive" 
@@ -278,16 +283,33 @@ export default function CustomerDetailPage() {
                       Business Information
                     </h3>
                     <div className="space-y-3 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Industry:</span>
-                        <Badge variant="secondary" className="bg-green-100 text-green-800">
-                          {customer.industry || 'N/A'}
-                        </Badge>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Tax ID:</span>
-                        <span className="font-medium text-gray-900">{customer.taxId || 'N/A'}</span>
-                      </div>
+                      {customer.phone && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Phone:</span>
+                          <span className="font-medium text-gray-900">{customer.phone}</span>
+                        </div>
+                      )}
+                      {customer.email && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Email:</span>
+                          <span className="font-medium text-gray-900">{customer.email}</span>
+                        </div>
+                      )}
+                      {customer.website && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Website:</span>
+                          <a href={customer.website} target="_blank" rel="noopener noreferrer" className="font-medium text-blue-600 hover:text-blue-800 flex items-center gap-1">
+                            {customer.website}
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                        </div>
+                      )}
+                      {customer.taxId && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Tax ID:</span>
+                          <span className="font-medium text-gray-900">{customer.taxId}</span>
+                        </div>
+                      )}
                       <div className="flex justify-between">
                         <span className="text-gray-600">Created:</span>
                         <span className="font-medium text-gray-900">{format(new Date(customer.createdAt), 'MMM dd, yyyy')}</span>
@@ -476,22 +498,51 @@ export default function CustomerDetailPage() {
                   {customer.assets.slice(0, 3).map((asset: any) => (
                     <Link 
                       key={asset.id} 
-                      href={`/admin/assets/${asset.id}`}
-                      className="block border border-gray-200 rounded-lg p-4 hover:bg-blue-50 hover:border-blue-300 transition-all duration-200 shadow-sm"
+                      href={`/admin/customers/${customer.id}/assets`}
+                      className="block border border-gray-200 rounded-lg p-6 hover:bg-blue-50 hover:border-blue-300 transition-all duration-200 shadow-sm"
                     >
                       <div className="flex justify-between items-start">
-                        <div className="flex items-center space-x-3">
-                          <div className="p-2 bg-blue-100 rounded-lg">
-                            <HardDrive className="h-4 w-4 text-blue-600" />
+                        <div className="flex items-start space-x-4 flex-1">
+                          <div className="p-3 bg-blue-100 rounded-lg">
+                            <HardDrive className="h-5 w-5 text-blue-600" />
                           </div>
-                          <div>
-                            <p className="font-semibold text-gray-900">{asset.machineId}</p>
-                            <p className="text-sm text-gray-600">{asset.model}</p>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-gray-900 text-base truncate" title={asset.serialNo}>
+                              {asset.serialNo || 'N/A'}
+                            </p>
+                            <p className="text-sm text-gray-600 mt-1 break-words" title={asset.model}>
+                              {asset.model || 'No model specified'}
+                            </p>
+                            {asset.location && (
+                              <p className="text-xs text-gray-500 mt-1 flex items-center">
+                                <MapPin className="h-3 w-3 mr-1" />
+                                {asset.location}
+                              </p>
+                            )}
+                            {asset.purchaseDate && (
+                              <p className="text-xs text-gray-500 mt-1 flex items-center">
+                                <Calendar className="h-3 w-3 mr-1" />
+                                Purchased: {format(new Date(asset.purchaseDate), 'MMM dd, yyyy')}
+                              </p>
+                            )}
                           </div>
                         </div>
-                        <Badge className="bg-gray-100 text-gray-800">
-                          {asset.status}
-                        </Badge>
+                        <div className="flex flex-col items-end space-y-2 ml-4">
+                          <Badge className={`${
+                            asset.status === 'ACTIVE' ? 'bg-green-100 text-green-800' :
+                            asset.status === 'INACTIVE' ? 'bg-gray-100 text-gray-800' :
+                            asset.status === 'MAINTENANCE' ? 'bg-yellow-100 text-yellow-800' :
+                            'bg-red-100 text-red-800'
+                          }`}>
+                            {asset.status}
+                          </Badge>
+                          {asset.warrantyEnd && (
+                            <div className="text-xs text-gray-500 text-right">
+                              <p>Warranty until:</p>
+                              <p className="font-medium">{format(new Date(asset.warrantyEnd), 'MMM dd, yyyy')}</p>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </Link>
                   ))}

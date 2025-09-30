@@ -6,7 +6,6 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5003/a
 interface CustomerFilters {
   search?: string;
   status?: string;
-  industry?: string;
   page?: number;
   limit?: number;
 }
@@ -39,7 +38,7 @@ async function makeServerRequest(endpoint: string) {
 }
 
 export async function getCustomers(filters: CustomerFilters = {}): Promise<Customer[]> {
-  const { search = '', status = 'all', industry = 'all', page = 1, limit = 10 } = filters;
+  const { search = '', status = 'all', page = 1, limit = 10 } = filters;
   
   const params = new URLSearchParams({
     page: page.toString(),
@@ -50,15 +49,13 @@ export async function getCustomers(filters: CustomerFilters = {}): Promise<Custo
   try {
     const customers: Customer[] = await makeServerRequest(`/customers?${params}`);
     
-    // Apply client-side filtering for status and industry since API might not support these
+    // Apply client-side filtering for status since API might not support this
     return customers.filter(customer => {
       const matchesStatus = status === 'all' || 
         (status === 'active' && customer.isActive) ||
         (status === 'inactive' && !customer.isActive);
       
-      const matchesIndustry = industry === 'all' || customer.industry === industry;
-      
-      return matchesStatus && matchesIndustry;
+      return matchesStatus;
     });
   } catch (error) {
     console.error('Error fetching customers:', error);
@@ -76,9 +73,7 @@ export async function getCustomerStats(customers: Customer[]) {
   };
 }
 
-export async function getUniqueIndustries(customers: Customer[]): Promise<string[]> {
-  return Array.from(new Set(customers.map(c => c.industry).filter((industry): industry is string => Boolean(industry))));
-}
+// Removed getUniqueIndustries function as industry filtering is no longer needed
 
 export async function deleteCustomerById(id: number): Promise<void> {
   try {

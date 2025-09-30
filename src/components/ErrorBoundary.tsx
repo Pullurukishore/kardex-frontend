@@ -30,6 +30,17 @@ export class ErrorBoundary extends Component<Props, State> {
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     // Log the error to an error reporting service
     console.error('Uncaught error:', error, errorInfo);
+    
+    // Check if this is a hydration error
+    if (error.message.includes('Hydration') || error.message.includes('hydration')) {
+      console.warn('Hydration error detected, attempting recovery...');
+      // For hydration errors, try to recover by reloading
+      setTimeout(() => {
+        window.location.reload();
+      }, 100);
+      return;
+    }
+    
     this.setState({ error, errorInfo });
   }
 

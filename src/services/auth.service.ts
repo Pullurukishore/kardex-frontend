@@ -80,13 +80,29 @@ export const authService = {
 
   getCurrentUser: async (): Promise<AuthResponseUser> => {
     const { data } = await api.get<AuthResponseUser>('/auth/me');
-    return {
+
+    console.log('AuthService - getCurrentUser - Raw data from server:', data);
+
+    // Ensure consistent name handling with better validation
+    let userName = data.name?.trim();
+    
+    // Check if name is valid and not a placeholder
+    if (!userName || userName === '' || userName === 'null' || userName === 'undefined' || userName === 'User') {
+      userName = data.email?.split('@')[0] || 'User';
+    }
+
+    console.log('AuthService - getCurrentUser - Processed name:', userName);
+
+    const processedUser = {
       ...data,
-      name: data.name || data.email.split('@')[0],
+      name: userName,
       isActive: data.isActive ?? true,
       tokenVersion: data.tokenVersion || '0',
       lastPasswordChange: data.lastPasswordChange || new Date().toISOString()
     };
+
+    console.log('AuthService - getCurrentUser - Final user data:', processedUser);
+    return processedUser;
   },
 
   refreshToken: (): Promise<{ accessToken: string }> => {

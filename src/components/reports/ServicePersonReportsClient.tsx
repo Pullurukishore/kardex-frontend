@@ -226,14 +226,15 @@ export default function ServicePersonReportsClient({
     }
   };
 
-  // Handle export to CSV
+  // Handle export to PDF
   const handleExport = async () => {
     try {
       setLoading(true);
       const response = await apiClient.get('/service-person-reports/export', {
         params: {
           fromDate: dateRange.from,
-          toDate: dateRange.to
+          toDate: dateRange.to,
+          format: 'pdf'
         },
         responseType: 'blob'
       });
@@ -242,7 +243,7 @@ export default function ServicePersonReportsClient({
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `service-reports-${dateRange.from}-to-${dateRange.to}.csv`);
+      link.setAttribute('download', `service-reports-${dateRange.from}-to-${dateRange.to}.pdf`);
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -343,7 +344,7 @@ export default function ServicePersonReportsClient({
             </Button>
             <Button onClick={handleExport} variant="secondary" className="bg-white/20 hover:bg-white/30 border-white/20">
               <Download className="h-4 w-4 mr-2" />
-              Export CSV
+              Export PDF
             </Button>
           </div>
         </div>
