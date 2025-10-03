@@ -1,7 +1,9 @@
 import { Suspense } from 'react';
+import Script from 'next/script';
 
 // Force dynamic rendering for this page
 export const dynamic = 'force-dynamic';
+
 import { DashboardErrorBoundary } from '@/components/dashboard/DashboardErrorBoundary';
 import DashboardErrorFallback from '@/components/dashboard/DashboardErrorFallback';
 import { getAllZoneDashboardData } from '@/lib/server/dashboard';
@@ -82,54 +84,60 @@ export default async function ZoneDashboardPage() {
     console.log('Zone Dashboard - Attempting to fetch data...');
     const { zoneDashboardData } = await getAllZoneDashboardData();
     console.log('Zone Dashboard - Data fetched successfully:', !!zoneDashboardData);
+    
+    // Log the actual data received from backend
+    if (zoneDashboardData) {
+      console.log('Zone Dashboard - Backend data:', JSON.stringify(zoneDashboardData, null, 2));
+    } else {
+      console.warn('Zone Dashboard - No data received from backend, will fetch on client side');
+    }
 
-    // Ensure we have safe default values
-    const safeZoneDashboardData: ZoneDashboardData = zoneDashboardData || {
-      zone: {
-        id: 0,
-        name: 'Unknown Zone',
-        description: 'No zone data available',
-        totalCustomers: 0,
-        totalTechnicians: 0,
-        totalAssets: 0
-      },
-      stats: {
-        openTickets: { count: 0, change: 0 },
-        unassignedTickets: { count: 0, critical: false },
-        inProgressTickets: { count: 0, change: 0 },
-        avgResponseTime: { hours: 0, minutes: 0, change: 0, isPositive: false },
-        avgResolutionTime: { days: 0, hours: 0, minutes: 0, change: 0, isPositive: false },
-        avgDowntime: { hours: 0, minutes: 0, change: 0, isPositive: false },
-        monthlyTickets: { count: 0, change: 0 },
-        activeMachines: { count: 0, change: 0 }
-      },
-      metrics: {
-        openTickets: 0,
-        inProgressTickets: 0,
-        resolvedTickets: 0,
-        technicianEfficiency: 0,
-        avgTravelTime: 0,
-        partsAvailability: 0,
-        equipmentUptime: 0,
-        firstCallResolutionRate: 0,
-        customerSatisfactionScore: 0,
-        avgResponseTime: 0,
-        avgResolutionTime: 0
-      },
-      trends: {
-        resolvedTickets: []
-      },
-      topIssues: [],
-      technicians: [],
-      recentActivities: []
-    };
+    // Pass the actual data from backend (or null to trigger client-side fetch)
+    // Don't use dummy data - let the client component fetch real data
+    const safeZoneDashboardData: ZoneDashboardData | null = zoneDashboardData;
 
     return (
-      <DashboardErrorBoundary fallback={DashboardErrorFallback}>
-        <Suspense fallback={<ZoneDashboardLoading />}>
-          <ZoneDashboardClient initialZoneDashboardData={safeZoneDashboardData} />
-        </Suspense>
-      </DashboardErrorBoundary>
+      <>
+        {/* Preload critical resources */}
+        <Script
+          id="zone-dashboard-preload"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `
+              // Preload critical dashboard resources
+              const preloadLinks = [
+                { rel: 'preconnect', href: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000' },
+                { rel: 'dns-prefetch', href: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000' }
+              ];
+              preloadLinks.forEach(link => {
+                const linkEl = document.createElement('link');
+                Object.assign(linkEl, link);
+                document.head.appendChild(linkEl);
+              });
+            `
+          }}
+        />
+        
+        {/* Non-critical analytics scripts */}
+        <Script
+          id="zone-dashboard-analytics"
+          strategy="lazyOnload"
+          dangerouslySetInnerHTML={{
+            __html: `
+              // Initialize performance monitoring
+              if (typeof window !== 'undefined' && window.performance) {
+                window.zoneDashboardLoadTime = Date.now();
+              }
+            `
+          }}
+        />
+
+        <DashboardErrorBoundary fallback={DashboardErrorFallback}>
+          <Suspense fallback={<ZoneDashboardLoading />}>
+            <ZoneDashboardClient initialZoneDashboardData={safeZoneDashboardData} />
+          </Suspense>
+        </DashboardErrorBoundary>
+      </>
     );
   } catch (error) {
     console.error('Failed to load zone dashboard:', error);
@@ -143,13 +151,10 @@ export default async function ZoneDashboardPage() {
 
     // Return error state
     return (
-      <div className="bg-red-50 rounded-lg p-6 max-w-2xl mx-auto my-8">
-        <div className="flex flex-col items-center text-center gap-4">
-          <div className="p-3 bg-red-100 rounded-full">
-            <div className="w-8 h-8 text-red-600">!</div>
-          </div>
-          <h3 className="text-lg font-medium text-red-800">Failed to load zone dashboard</h3>
-          <p className="text-red-700">{error instanceof Error ? error.message : 'An unexpected error occurred'}</p>
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold text-red-600">Failed to load zone dashboard</h2>
+          <p className="text-gray-600 mt-2">Please try refreshing the page</p>
         </div>
       </div>
     );

@@ -342,7 +342,7 @@ export default function ZoneTicketsPage() {
                     <Filter className="mr-2 h-4 w-4" />
                     <SelectValue placeholder="Filter by status" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-[300px] overflow-y-auto">
                     <SelectItem value="">All Statuses</SelectItem>
                     <SelectItem value="OPEN">Open</SelectItem>
                     <SelectItem value="ASSIGNED">Assigned</SelectItem>

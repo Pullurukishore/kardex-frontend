@@ -10,7 +10,7 @@ export default function AttendanceViewPage() {
   return (
     <AttendanceDetailView
       attendanceId={attendanceId}
-      apiEndpoint={`/admin/attendance/${attendanceId}`}
+      apiEndpoint={`/zone/attendance/${attendanceId}`}
       backUrl="/zone/attendence"
       pageTitle="Zone Attendance Details"
     />

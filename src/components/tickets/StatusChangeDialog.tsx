@@ -41,6 +41,8 @@ export const TicketStatus = {
   ASSIGNED: 'ASSIGNED',
   IN_PROCESS: 'IN_PROCESS', // Note: Backend uses IN_PROGRESS but schema has IN_PROCESS
   IN_PROGRESS: 'IN_PROGRESS', // Controller uses this instead of IN_PROCESS
+  'WORK IN PROGRESS': 'WORK IN PROGRESS', // Alternative display format
+  WORK_IN_PROGRESS: 'WORK_IN_PROGRESS', // Alternative underscore format
   WAITING_CUSTOMER: 'WAITING_CUSTOMER',
   ONSITE_VISIT: 'ONSITE_VISIT',
   ONSITE_VISIT_PLANNED: 'ONSITE_VISIT_PLANNED',
@@ -97,6 +99,33 @@ const validTransitions: Record<TicketStatusType, TicketStatusType[]> = {
   
   // Main working state - multiple possible next steps
   [TicketStatus.IN_PROGRESS]: [
+    TicketStatus.WAITING_CUSTOMER, 
+    TicketStatus.ONSITE_VISIT,
+    TicketStatus.PO_NEEDED,
+    TicketStatus.SPARE_PARTS_NEEDED,
+    TicketStatus.CLOSED_PENDING,
+    TicketStatus.CANCELLED,
+    TicketStatus.RESOLVED,
+    TicketStatus.ON_HOLD,
+    TicketStatus.ESCALATED,
+    TicketStatus.PENDING
+  ],
+  
+  // Alternative formats for IN_PROGRESS - same transitions
+  [TicketStatus['WORK IN PROGRESS']]: [
+    TicketStatus.WAITING_CUSTOMER, 
+    TicketStatus.ONSITE_VISIT,
+    TicketStatus.PO_NEEDED,
+    TicketStatus.SPARE_PARTS_NEEDED,
+    TicketStatus.CLOSED_PENDING,
+    TicketStatus.CANCELLED,
+    TicketStatus.RESOLVED,
+    TicketStatus.ON_HOLD,
+    TicketStatus.ESCALATED,
+    TicketStatus.PENDING
+  ],
+  
+  [TicketStatus.WORK_IN_PROGRESS]: [
     TicketStatus.WAITING_CUSTOMER, 
     TicketStatus.ONSITE_VISIT,
     TicketStatus.PO_NEEDED,
@@ -271,7 +300,20 @@ const validTransitions: Record<TicketStatusType, TicketStatusType[]> = {
 
 // Get available status transitions based on current status and user role
 const getAvailableStatuses = (currentStatus: TicketStatusType, userRole?: UserRole): TicketStatusType[] => {
-  const availableTransitions = validTransitions[currentStatus] || [];
+  // Handle status mapping for different variations
+  let mappedStatus = currentStatus;
+  
+  // Map common status variations to standard values
+  if (currentStatus === 'WORK IN PROGRESS' as any) {
+    mappedStatus = TicketStatus.IN_PROGRESS;
+  } else if (currentStatus === 'WORK_IN_PROGRESS' as any) {
+    mappedStatus = TicketStatus.IN_PROGRESS;
+  }
+  
+  console.log('StatusChangeDialog: Original status:', currentStatus, 'Mapped to:', mappedStatus);
+  
+  const availableTransitions = validTransitions[mappedStatus] || [];
+  console.log('StatusChangeDialog: Available transitions:', availableTransitions);
   
   // Filter based on user role permissions
   return availableTransitions.filter(status => {
@@ -427,6 +469,8 @@ export function StatusChangeDialog({
       [TicketStatus.ASSIGNED]: { label: 'Assigned', shortLabel: 'Assigned', category: 'Basic', description: 'Assigned to a technician' },
       [TicketStatus.IN_PROCESS]: { label: 'In Process', shortLabel: 'In Process', category: 'Basic', description: 'Work is being processed' },
       [TicketStatus.IN_PROGRESS]: { label: 'In Progress', shortLabel: 'In Progress', category: 'Basic', description: 'Work is currently being done' },
+      [TicketStatus['WORK IN PROGRESS']]: { label: 'Work In Progress', shortLabel: 'Work In Progress', category: 'Basic', description: 'Work is currently being done' },
+      [TicketStatus.WORK_IN_PROGRESS]: { label: 'Work In Progress', shortLabel: 'Work In Progress', category: 'Basic', description: 'Work is currently being done' },
       [TicketStatus.WAITING_CUSTOMER]: { label: 'Waiting Customer', shortLabel: 'Wait Customer', category: 'Basic', description: 'Waiting for customer response' },
       [TicketStatus.RESOLVED]: { label: 'Resolved', shortLabel: 'Resolved', category: 'Completion', description: 'Issue has been resolved' },
       [TicketStatus.CLOSED]: { label: 'Closed', shortLabel: 'Closed', category: 'Completion', description: 'Ticket is closed and complete' },

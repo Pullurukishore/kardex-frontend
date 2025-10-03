@@ -5,8 +5,12 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:standalone": "BUILD_STANDALONE=true next build",
+    "build:export": "NEXT_EXPORT=true next build && next export",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "deploy:firebase": "npm run build:export && firebase deploy --only hosting",
+    "deploy:cloudrun": "gcloud builds submit --config cloudbuild-cloudrun.yaml"
   },
   "dependencies": {
     "@headlessui/react": "^1.7.17",
@@ -60,6 +64,7 @@
     "zod": "^3.22.4"
   },
   "devDependencies": {
+    "@next/bundle-analyzer": "^15.5.4",
     "@types/next-auth": "^3.13.0",
     "@types/node": "^20",
     "@types/react": "^18",

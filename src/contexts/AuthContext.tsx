@@ -137,38 +137,6 @@ function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const enforceRoleAccess = (role: UserRole) => {
-    // Prevent redirect conflicts by being more selective about when to redirect
-    const allowedPath = getRoleBasedRedirect(role);
-    
-    // Only redirect if user is on a completely wrong path, not just any admin path
-    if (pathname.startsWith('/admin') && role !== UserRole.ADMIN && !pathname.startsWith('/auth/')) {
-      console.log('AuthContext - Redirecting non-admin user from admin path');
-      // Use setTimeout to prevent conflicts with other redirects
-      setTimeout(() => {
-        if (typeof window !== 'undefined') {
-          window.location.href = allowedPath;
-        }
-      }, 50);
-    }
-    if (pathname.startsWith('/zone') && role !== UserRole.ZONE_USER && !pathname.startsWith('/auth/')) {
-      console.log('AuthContext - Redirecting non-zone user from zone path');
-      setTimeout(() => {
-        if (typeof window !== 'undefined') {
-          window.location.href = allowedPath;
-        }
-      }, 50);
-    }
-    if (pathname.startsWith('/service-person') && role !== UserRole.SERVICE_PERSON && !pathname.startsWith('/auth/')) {
-      console.log('AuthContext - Redirecting non-service-person user from service-person path');
-      setTimeout(() => {
-        if (typeof window !== 'undefined') {
-          window.location.href = allowedPath;
-        }
-      }, 50);
-    }
-  };
-
   const loadUser = useCallback(async (currentPath?: string): Promise<User | null> => {
     const pathToCheck = currentPath || pathname;
     if (pathToCheck.startsWith('/auth/')) {
@@ -232,11 +200,8 @@ function AuthProvider({ children }: { children: ReactNode }) {
         maxAge: 60 * 60 * 24 * 7, // 7 days
       });
 
-      // Only enforce role access if we're not on auth pages
-      if (!pathToCheck.startsWith('/auth/')) {
-        console.log('LoadUser - Enforcing role access for:', safeUser.role);
-        enforceRoleAccess(safeUser.role);
-      }
+      // Role-based access is now handled by server-side layout and middleware
+      // Removed client-side enforceRoleAccess to prevent render-time redirects
 
       return safeUser;
     } catch (err) {

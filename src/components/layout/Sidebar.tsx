@@ -40,6 +40,7 @@ import {
   Sparkles,
 } from "lucide-react";
 
+
 type NavItem = {
   title: string;
   href: string;
@@ -48,30 +49,144 @@ type NavItem = {
   children?: NavItem[];
   disabled?: boolean;
   badge?: string;
+  iconColor?: string; // Custom icon color
+  iconBgColor?: string; // Background color for icon
 };
 
 const navigation: NavItem[] = [
   // Admin
-  { title: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard, roles: [UserRole.ADMIN] },
-  { title: "Daily Activity", href: "/admin/attendance", icon: Calendar, roles: [UserRole.ADMIN] },
-  { title: "Customers", href: "/admin/customers", icon: Users, roles: [UserRole.ADMIN] },
-  { title: "Service Persons", href: "/admin/service-person", icon: Users, roles: [UserRole.ADMIN] },
-  { title: "Service Zones", href: "/admin/service-zones", icon: MapPin, roles: [UserRole.ADMIN] },
-  { title: "Zone Users", href: "/admin/zone-users", icon: Users, roles: [UserRole.ADMIN] },
-  { title: "Tickets", href: "/admin/tickets", icon: ClipboardList, roles: [UserRole.ADMIN] },
-  { title: "Reports", href: "/admin/reports", icon: FileText, roles: [UserRole.ADMIN] },
+  { 
+    title: "Dashboard", 
+    href: "/admin/dashboard", 
+    icon: LayoutDashboard, 
+    roles: [UserRole.ADMIN],
+    iconColor: "text-blue-600",
+    iconBgColor: "bg-blue-50"
+  },
+  { 
+    title: "Daily Activity", 
+    href: "/admin/attendance", 
+    icon: Calendar, 
+    roles: [UserRole.ADMIN],
+    iconColor: "text-emerald-600",
+    iconBgColor: "bg-emerald-50"
+  },
+  { 
+    title: "Customers", 
+    href: "/admin/customers", 
+    icon: Users, 
+    roles: [UserRole.ADMIN],
+    iconColor: "text-purple-600",
+    iconBgColor: "bg-purple-50"
+  },
+  { 
+    title: "Service Persons", 
+    href: "/admin/service-person", 
+    icon: Activity, 
+    roles: [UserRole.ADMIN],
+    iconColor: "text-orange-600",
+    iconBgColor: "bg-orange-50"
+  },
+  { 
+    title: "Service Zones", 
+    href: "/admin/service-zones", 
+    icon: MapPin, 
+    roles: [UserRole.ADMIN],
+    iconColor: "text-rose-600",
+    iconBgColor: "bg-rose-50"
+  },
+  { 
+    title: "Zone Users", 
+    href: "/admin/zone-users", 
+    icon: Users, 
+    roles: [UserRole.ADMIN],
+    iconColor: "text-indigo-600",
+    iconBgColor: "bg-indigo-50"
+  },
+  { 
+    title: "Tickets", 
+    href: "/admin/tickets", 
+    icon: Ticket, 
+    roles: [UserRole.ADMIN],
+    iconColor: "text-cyan-600",
+    iconBgColor: "bg-cyan-50"
+  },
+  { 
+    title: "Reports", 
+    href: "/admin/reports", 
+    icon: BarChart2, 
+    roles: [UserRole.ADMIN],
+    iconColor: "text-amber-600",
+    iconBgColor: "bg-amber-50"
+  },
 
   // Service Person
-  { title: "Dashboard", href: "/service-person/dashboard", icon: LayoutDashboard, roles: [UserRole.SERVICE_PERSON] },
-  { title: "My Tickets", href: "/service-person/tickets", icon: Ticket, roles: [UserRole.SERVICE_PERSON] },
+  { 
+    title: "Dashboard", 
+    href: "/service-person/dashboard", 
+    icon: LayoutDashboard, 
+    roles: [UserRole.SERVICE_PERSON],
+    iconColor: "text-blue-600",
+    iconBgColor: "bg-blue-50"
+  },
+  { 
+    title: "My Tickets", 
+    href: "/service-person/tickets", 
+    icon: Ticket, 
+    roles: [UserRole.SERVICE_PERSON],
+    iconColor: "text-cyan-600",
+    iconBgColor: "bg-cyan-50"
+  },
 
   // Zone User
-  { title: "Dashboard", href: "/zone/dashboard", icon: LayoutDashboard, roles: [UserRole.ZONE_USER] },
-  { title: "Daily Activity", href: "/zone/attendence", icon: Calendar, roles: [UserRole.ZONE_USER] },
-  { title: "Service Persons", href: "/zone/service-persons", icon: MapPin, roles: [UserRole.ZONE_USER] },
-  { title: "Customers", href: "/zone/customers", icon: Users, roles: [UserRole.ZONE_USER] },
-  { title: "Tickets", href: "/zone/tickets", icon: ClipboardList, roles: [UserRole.ZONE_USER] },
-  { title: "Reports", href: "/zone/reports", icon: FileText, roles: [UserRole.ZONE_USER] },
+  { 
+    title: "Dashboard", 
+    href: "/zone/dashboard", 
+    icon: LayoutDashboard, 
+    roles: [UserRole.ZONE_USER],
+    iconColor: "text-blue-600",
+    iconBgColor: "bg-blue-50"
+  },
+  { 
+    title: "Daily Activity", 
+    href: "/zone/attendence", 
+    icon: Calendar, 
+    roles: [UserRole.ZONE_USER],
+    iconColor: "text-emerald-600",
+    iconBgColor: "bg-emerald-50"
+  },
+  { 
+    title: "Service Persons", 
+    href: "/zone/service-persons", 
+    icon: Activity, 
+    roles: [UserRole.ZONE_USER],
+    iconColor: "text-orange-600",
+    iconBgColor: "bg-orange-50"
+  },
+  { 
+    title: "Customers", 
+    href: "/zone/customers", 
+    icon: Users, 
+    roles: [UserRole.ZONE_USER],
+    iconColor: "text-purple-600",
+    iconBgColor: "bg-purple-50"
+  },
+  { 
+    title: "Tickets", 
+    href: "/zone/tickets", 
+    icon: Ticket, 
+    roles: [UserRole.ZONE_USER],
+    iconColor: "text-cyan-600",
+    iconBgColor: "bg-cyan-50"
+  },
+  { 
+    title: "Reports", 
+    href: "/zone/reports", 
+    icon: BarChart2, 
+    roles: [UserRole.ZONE_USER],
+    iconColor: "text-amber-600",
+    iconBgColor: "bg-amber-50"
+  },
 ];
 
 interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -203,10 +318,10 @@ export function Sidebar({
               className={cn(
                 "group relative flex items-center rounded-xl transition-all duration-200 ease-out w-full focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:ring-offset-2 focus:ring-offset-transparent",
                 // Mobile-optimized padding and sizing
-                isMobile ? "px-4 py-4 text-base font-medium min-h-[56px]" : "px-3 py-3 text-sm font-medium",
+                isMobile ? "px-3 py-3 text-base font-medium min-h-[56px]" : "px-2.5 py-2.5 text-sm font-medium",
                 isActive
                   ? "bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 text-white shadow-lg shadow-blue-500/30"
-                  : "text-slate-700 hover:text-slate-900 hover:bg-white/80 hover:shadow-sm",
+                  : "text-slate-700 hover:text-slate-900 hover:bg-white/80 hover:shadow-md",
                 // Mobile touch optimization
                 isMobile ? "touch-manipulation" : ""
               )}
@@ -238,24 +353,32 @@ export function Sidebar({
                   )}
                 </AnimatePresence>
                 
-                <Icon
-                  className={cn(
-                    "flex-shrink-0 transition-all duration-200 relative z-10",
-                    // Mobile-optimized icon sizing
-                    isMobile ? "h-6 w-6" : "h-5 w-5",
-                    isActive
-                      ? "text-white drop-shadow-sm transform scale-110"
-                      : "text-slate-500 group-hover:text-blue-600 group-hover:scale-110"
-                  )}
-                />
+                {/* Icon with colored background */}
+                <div className={cn(
+                  "flex-shrink-0 rounded-lg transition-all duration-200 relative z-10 flex items-center justify-center",
+                  isMobile ? "h-10 w-10" : "h-9 w-9",
+                  isActive
+                    ? "bg-white/20 shadow-lg"
+                    : cn(item.iconBgColor, "group-hover:shadow-md group-hover:scale-105")
+                )}>
+                  <Icon
+                    className={cn(
+                      "transition-all duration-200",
+                      isMobile ? "h-5 w-5" : "h-4 w-4",
+                      isActive
+                        ? "text-white drop-shadow-sm"
+                        : cn(item.iconColor, "group-hover:scale-110")
+                    )}
+                  />
+                </div>
                 
                 {(!collapsed || isMobile) && (
                   <span className={cn(
                     "flex flex-1 items-center justify-between relative z-10",
-                    isMobile ? "ml-4" : "ml-3"
+                    isMobile ? "ml-3" : "ml-2.5"
                   )}>
                     <span className={cn(
-                      "truncate font-medium",
+                      "truncate font-semibold",
                       isMobile ? "text-base" : "text-sm"
                     )}>{item.title}</span>
                     {item.badge && (
@@ -421,14 +544,26 @@ export function Sidebar({
             onClick={() => logout?.()}
             aria-label="Logout"
             className={cn(
-              "group w-full flex items-center gap-3 rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:ring-offset-2 focus:ring-offset-transparent",
-              "hover:bg-red-50 hover:shadow-sm text-slate-700 hover:text-red-700",
-              isMobile ? "px-4 py-3 text-base" : "px-3 py-2 text-sm"
+              "group w-full flex items-center rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:ring-offset-2 focus:ring-offset-transparent",
+              "hover:bg-red-50 hover:shadow-md text-slate-700 hover:text-red-700",
+              isMobile ? "px-3 py-3 text-base" : "px-2.5 py-2.5 text-sm"
             )}
           >
-            <LogOut className={cn(isMobile ? "h-6 w-6" : "h-5 w-5", "text-slate-500 group-hover:text-red-600")} />
+            {/* Icon with colored background */}
+            <div className={cn(
+              "flex-shrink-0 rounded-lg transition-all duration-200 flex items-center justify-center bg-red-50 group-hover:bg-red-100 group-hover:shadow-md group-hover:scale-105",
+              isMobile ? "h-10 w-10" : "h-9 w-9"
+            )}>
+              <LogOut className={cn(
+                "transition-all duration-200 text-red-600 group-hover:scale-110",
+                isMobile ? "h-5 w-5" : "h-4 w-4"
+              )} />
+            </div>
             {(!collapsed || isMobile) && (
-              <span className="font-medium">Logout</span>
+              <span className={cn(
+                "font-semibold",
+                isMobile ? "ml-3" : "ml-2.5"
+              )}>Logout</span>
             )}
             {/* Tooltip when collapsed */}
             {collapsed && !isMobile && (

@@ -2,11 +2,6 @@
 const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
-  images: {
-    domains: ['localhost'],
-    formats: ['image/webp', 'image/avif'],
-    minimumCacheTTL: 60,
-  },
   experimental: {
     // Enable new CSS features
     optimizeCss: true,
@@ -96,6 +91,20 @@ const nextConfig = {
   // Add environment variables
   env: {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001',
+  },
+  
+  // Output configuration for different deployment targets
+  output: process.env.BUILD_STANDALONE === 'true' ? 'standalone' : undefined,
+  
+  // Enable static export for Firebase Hosting
+  trailingSlash: true,
+  
+  // Image domains for production
+  images: {
+    domains: ['localhost', 'your-backend-domain.run.app'],
+    formats: ['image/webp', 'image/avif'],
+    minimumCacheTTL: 60,
+    unoptimized: process.env.NEXT_EXPORT === 'true',
   },
   // Enable TypeScript checking
   typescript: {

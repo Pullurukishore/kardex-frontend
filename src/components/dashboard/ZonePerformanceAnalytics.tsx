@@ -1,7 +1,6 @@
 "use client";
 
 import React from "react";
-import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,7 +10,6 @@ import {
   Building2,
   Users,
   Ticket,
-  Eye,
   Activity,
   Globe,
   RefreshCw,
@@ -67,7 +65,6 @@ export default function ZonePerformanceAnalytics({
   isRefreshing, 
   onRefresh 
 }: ZonePerformanceAnalyticsProps) {
-  const router = useRouter();
 
   if (!dashboardData?.adminStats?.zoneWiseTickets?.length) {
     return null;
@@ -236,19 +233,7 @@ export default function ZonePerformanceAnalytics({
                 </div>
 
                 <div className="mt-4 pt-4 border-t border-slate-100">
-                  <div className="flex items-center justify-between">
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="text-indigo-600 hover:text-indigo-700"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        router.push(`/admin/FSA`);
-                      }}
-                    >
-                      <Eye className="w-4 h-4 mr-1" />
-                      View Details
-                    </Button>
+                  <div className="flex items-center justify-end">
                     <div className="flex items-center gap-1 text-xs text-slate-500">
                       <Activity className="w-3 h-3" />
                       Live Data
@@ -314,7 +299,8 @@ export default function ZonePerformanceAnalytics({
                 ))}
               </div>
 
-              {/* Zone Efficiency Metrics */}
+              {/* Zone Efficiency Metrics - Only show for multiple zones */}
+              {(dashboardData?.adminStats?.zoneWiseTickets?.length || 0) > 1 && (
               <div className="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2">
                   <h4 className="font-semibold text-lg mb-4 flex items-center gap-2">
@@ -397,6 +383,7 @@ export default function ZonePerformanceAnalytics({
                   </div>
                 </div>
               </div>
+              )}
             </CardContent>
           </Card>
         </div>

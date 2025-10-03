@@ -146,7 +146,34 @@ export function Header({ onMenuClick, className, isMobile = false, sidebarOpen =
             </Button>
           )}
           
-          <div className="flex items-center">
+          <div className="flex items-center gap-3">
+            {/* Logo Icon */}
+            <motion.div
+              className="relative"
+              whileHover={{ rotate: [0, -10, 10, -10, 0] }}
+              transition={{ duration: 0.5 }}
+            >
+              <div className="relative">
+                <Ticket className={cn(
+                  "text-blue-600 drop-shadow-lg",
+                  isMobile ? "h-8 w-8" : "h-10 w-10 lg:h-12 lg:w-12"
+                )} />
+                <motion.div
+                  className="absolute inset-0 bg-blue-500/20 rounded-lg blur-xl"
+                  animate={{
+                    scale: [1, 1.2, 1],
+                    opacity: [0.3, 0.6, 0.3],
+                  }}
+                  transition={{
+                    duration: 2,
+                    repeat: Infinity,
+                    ease: "easeInOut",
+                  }}
+                />
+              </div>
+            </motion.div>
+            
+            {/* Title Text */}
             <motion.div
               className="relative group"
               whileHover={{ scale: 1.02 }}

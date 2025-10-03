@@ -39,6 +39,31 @@ import { format, parseISO, differenceInMinutes } from 'date-fns';
 import Link from 'next/link';
 
 // Types based on backend schema
+interface ActivityStage {
+  id: number;
+  stage: string;
+  startTime: string;
+  endTime?: string;
+  duration?: number;
+  location?: string;
+  latitude?: number;
+  longitude?: number;
+  notes?: string;
+}
+
+interface TicketStatusHistory {
+  id: number;
+  status: string;
+  changedAt: string;
+  notes?: string;
+  timeInStatus?: number;
+  totalTimeOpen?: number;
+  changedBy: {
+    id: number;
+    name: string;
+  };
+}
+
 interface AttendanceDetail {
   id: string | number;
   userId: number;
@@ -68,7 +93,7 @@ interface AttendanceDetail {
     }>;
     activityLogs: Array<{
       id: number;
-      activityType: 'TICKET_WORK' | 'TRAVEL' | 'MEETING' | 'TRAINING' | 'OTHER';
+      activityType: 'TICKET_WORK' | 'TRAVEL' | 'MEETING' | 'TRAINING' | 'OTHER' | 'WORK_FROM_HOME' | 'BD_VISIT' | 'PO_DISCUSSION' | 'SPARE_REPLACEMENT' | 'MAINTENANCE' | 'DOCUMENTATION' | 'INSTALLATION' | 'MAINTENANCE_PLANNED' | 'REVIEW_MEETING' | 'RELOCATION';
       title: string;
       description?: string;
       startTime: string;
@@ -77,6 +102,7 @@ interface AttendanceDetail {
       location?: string;
       latitude?: number;
       longitude?: number;
+      ActivityStage: ActivityStage[];
       ticket?: {
         id: number;
         title: string;
@@ -84,6 +110,7 @@ interface AttendanceDetail {
         customer: {
           companyName: string;
         };
+        statusHistory: TicketStatusHistory[];
       };
     }>;
   };
@@ -92,16 +119,29 @@ interface AttendanceDetail {
     end: string;
     duration: number;
   }>;
+  auditLogs?: AuditLog[];
 }
 
 interface AuditLog {
   id: number;
   action: string;
-  entityType: string;
-  entityId: number;
-  performedById: number;
-  updatedAt: string;
-  details: any;
+  entityType?: string;
+  entityId?: number;
+  userId?: number;
+  performedById?: number;
+  performedAt: string;
+  details?: any;
+  metadata?: any;
+  oldValue?: any;
+  newValue?: any;
+  status?: string;
+  ipAddress?: string;
+  userAgent?: string;
+  performedBy?: {
+    id: number;
+    name: string;
+    email: string;
+  };
 }
 
 interface AttendanceDetailViewProps {
@@ -126,7 +166,74 @@ const ACTIVITY_TYPE_CONFIG = {
   TRAVEL: { label: 'Travel', color: 'bg-green-100 text-green-800', icon: Navigation },
   MEETING: { label: 'Meeting', color: 'bg-purple-100 text-purple-800', icon: User },
   TRAINING: { label: 'Training', color: 'bg-yellow-100 text-yellow-800', icon: BarChart3 },
+  WORK_FROM_HOME: { label: 'Work From Home', color: 'bg-indigo-100 text-indigo-800', icon: Building2 },
+  BD_VISIT: { label: 'BD Visit', color: 'bg-cyan-100 text-cyan-800', icon: User },
+  PO_DISCUSSION: { label: 'PO Discussion', color: 'bg-orange-100 text-orange-800', icon: FileText },
+  SPARE_REPLACEMENT: { label: 'Spare Replacement', color: 'bg-red-100 text-red-800', icon: Activity },
+  MAINTENANCE: { label: 'Maintenance', color: 'bg-emerald-100 text-emerald-800', icon: Activity },
+  DOCUMENTATION: { label: 'Documentation', color: 'bg-slate-100 text-slate-800', icon: FileText },
+  INSTALLATION: { label: 'Installation', color: 'bg-teal-100 text-teal-800', icon: Activity },
+  MAINTENANCE_PLANNED: { label: 'Planned Maintenance', color: 'bg-lime-100 text-lime-800', icon: Activity },
+  REVIEW_MEETING: { label: 'Review Meeting', color: 'bg-violet-100 text-violet-800', icon: User },
+  RELOCATION: { label: 'Relocation', color: 'bg-pink-100 text-pink-800', icon: Navigation },
   OTHER: { label: 'Other', color: 'bg-gray-100 text-gray-800', icon: Activity },
+};
+
+const STAGE_CONFIG = {
+  STARTED: { label: 'Started', color: 'bg-blue-100 text-blue-800', icon: CheckCircle },
+  TRAVELING: { label: 'Traveling', color: 'bg-yellow-100 text-yellow-800', icon: Navigation },
+  ARRIVED: { label: 'Arrived', color: 'bg-green-100 text-green-800', icon: MapPin },
+  WORK_IN_PROGRESS: { label: 'Work in Progress', color: 'bg-orange-100 text-orange-800', icon: Activity },
+  COMPLETED: { label: 'Completed', color: 'bg-emerald-100 text-emerald-800', icon: CheckCircle },
+  ASSESSMENT: { label: 'Assessment', color: 'bg-purple-100 text-purple-800', icon: Info },
+  PLANNING: { label: 'Planning', color: 'bg-indigo-100 text-indigo-800', icon: FileText },
+  EXECUTION: { label: 'Execution', color: 'bg-red-100 text-red-800', icon: Activity },
+  TESTING: { label: 'Testing', color: 'bg-cyan-100 text-cyan-800', icon: Activity },
+  DOCUMENTATION: { label: 'Documentation', color: 'bg-slate-100 text-slate-800', icon: FileText },
+  CUSTOMER_HANDOVER: { label: 'Customer Handover', color: 'bg-teal-100 text-teal-800', icon: User },
+  PREPARATION: { label: 'Preparation', color: 'bg-violet-100 text-violet-800', icon: Activity },
+  CLEANUP: { label: 'Cleanup', color: 'bg-lime-100 text-lime-800', icon: Activity },
+};
+
+const TICKET_STATUS_CONFIG = {
+  OPEN: { label: 'Open', color: 'bg-blue-100 text-blue-800' },
+  ASSIGNED: { label: 'Assigned', color: 'bg-purple-100 text-purple-800' },
+  IN_PROCESS: { label: 'In Process', color: 'bg-yellow-100 text-yellow-800' },
+  WAITING_CUSTOMER: { label: 'Waiting Customer', color: 'bg-orange-100 text-orange-800' },
+  CLOSED_PENDING: { label: 'Closed Pending', color: 'bg-gray-100 text-gray-800' },
+  CLOSED: { label: 'Closed', color: 'bg-green-100 text-green-800' },
+  ONSITE_VISIT: { label: 'Onsite Visit', color: 'bg-indigo-100 text-indigo-800' },
+  ONSITE_VISIT_PLANNED: { label: 'Onsite Visit Planned', color: 'bg-cyan-100 text-cyan-800' },
+  RESOLVED: { label: 'Resolved', color: 'bg-emerald-100 text-emerald-800' },
+  SPARE_PARTS_NEEDED: { label: 'Spare Parts Needed', color: 'bg-red-100 text-red-800' },
+  SPARE_PARTS_BOOKED: { label: 'Spare Parts Booked', color: 'bg-pink-100 text-pink-800' },
+  SPARE_PARTS_DELIVERED: { label: 'Spare Parts Delivered', color: 'bg-teal-100 text-teal-800' },
+  PENDING: { label: 'Pending', color: 'bg-slate-100 text-slate-800' },
+  IN_PROGRESS: { label: 'In Progress', color: 'bg-amber-100 text-amber-800' },
+  ON_HOLD: { label: 'On Hold', color: 'bg-gray-100 text-gray-800' },
+  ESCALATED: { label: 'Escalated', color: 'bg-red-100 text-red-800' },
+  PO_NEEDED: { label: 'PO Needed', color: 'bg-orange-100 text-orange-800' },
+  PO_RECEIVED: { label: 'PO Received', color: 'bg-lime-100 text-lime-800' },
+  CANCELLED: { label: 'Cancelled', color: 'bg-gray-100 text-gray-800' },
+  REOPENED: { label: 'Reopened', color: 'bg-yellow-100 text-yellow-800' },
+  ONSITE_VISIT_STARTED: { label: 'Onsite Visit Started', color: 'bg-blue-100 text-blue-800' },
+  ONSITE_VISIT_REACHED: { label: 'Onsite Visit Reached', color: 'bg-green-100 text-green-800' },
+  ONSITE_VISIT_IN_PROGRESS: { label: 'Onsite Visit In Progress', color: 'bg-orange-100 text-orange-800' },
+  ONSITE_VISIT_RESOLVED: { label: 'Onsite Visit Resolved', color: 'bg-emerald-100 text-emerald-800' },
+  ONSITE_VISIT_PENDING: { label: 'Onsite Visit Pending', color: 'bg-slate-100 text-slate-800' },
+  ONSITE_VISIT_COMPLETED: { label: 'Onsite Visit Completed', color: 'bg-green-100 text-green-800' },
+  PO_REACHED: { label: 'PO Reached', color: 'bg-teal-100 text-teal-800' },
+};
+
+const AUDIT_ACTION_CONFIG = {
+  ATTENDANCE_CHECKED_IN: { label: 'Checked In', color: 'bg-green-100 text-green-800', icon: UserCheck },
+  ATTENDANCE_CHECKED_OUT: { label: 'Checked Out', color: 'bg-blue-100 text-blue-800', icon: UserX },
+  ATTENDANCE_UPDATED: { label: 'Attendance Updated', color: 'bg-yellow-100 text-yellow-800', icon: FileText },
+  ACTIVITY_LOG_ADDED: { label: 'Activity Added', color: 'bg-purple-100 text-purple-800', icon: Activity },
+  ACTIVITY_LOG_UPDATED: { label: 'Activity Updated', color: 'bg-indigo-100 text-indigo-800', icon: Activity },
+  ACTIVITY_STAGE_UPDATED: { label: 'Stage Updated', color: 'bg-cyan-100 text-cyan-800', icon: Navigation },
+  TICKET_STATUS_CHANGED: { label: 'Ticket Status Changed', color: 'bg-orange-100 text-orange-800', icon: FileText },
+  AUTO_CHECKOUT_PERFORMED: { label: 'Auto Checkout', color: 'bg-purple-100 text-purple-800', icon: Zap },
 };
 
 export default function AttendanceDetailView({
@@ -157,6 +264,7 @@ export default function AttendanceDetailView({
       console.log('[Attendance View] Parsed detail:', detail);
       if (detail && (detail.id !== undefined)) {
         setAttendance(detail as any);
+        setAuditLogs(detail.auditLogs || []);
       } else {
         throw new Error('No attendance data received');
       }
@@ -511,6 +619,69 @@ export default function AttendanceDetailView({
                           {activity.description && (
                             <p className="text-sm text-gray-600">{activity.description}</p>
                           )}
+
+                          {/* Activity Stages */}
+                          {activity.ActivityStage && activity.ActivityStage.length > 0 && (
+                            <div className="mt-3">
+                              <h5 className="text-sm font-medium text-gray-700 mb-2">Activity Stages:</h5>
+                              <div className="space-y-2">
+                                {activity.ActivityStage.map((stage, stageIndex) => {
+                                  const stageConfig = STAGE_CONFIG[stage.stage as keyof typeof STAGE_CONFIG] || { label: stage.stage, color: 'bg-gray-100 text-gray-800', icon: Activity };
+                                  const StageIcon = stageConfig.icon;
+                                  return (
+                                    <div key={stage.id} className="flex items-center gap-2 text-sm">
+                                      <div className={`p-1 rounded ${stageConfig.color}`}>
+                                        <StageIcon className="h-3 w-3" />
+                                      </div>
+                                      <span className="font-medium">{stageConfig.label}</span>
+                                      <span className="text-gray-500">
+                                        {formatTime(stage.startTime)}
+                                        {stage.endTime && ` - ${formatTime(stage.endTime)}`}
+                                      </span>
+                                      {stage.duration && (
+                                        <span className="text-gray-400">({formatDuration(stage.duration)})</span>
+                                      )}
+                                      {stage.location && (
+                                        <div className="flex items-center gap-1 text-gray-400">
+                                          <MapPin className="h-3 w-3" />
+                                          <span className="truncate max-w-32">{stage.location}</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Ticket Status History for TICKET_WORK activities */}
+                          {activity.activityType === 'TICKET_WORK' && activity.ticket?.statusHistory && activity.ticket.statusHistory.length > 0 && (
+                            <div className="mt-3">
+                              <h5 className="text-sm font-medium text-gray-700 mb-2">Ticket Work States:</h5>
+                              <div className="space-y-2">
+                                {activity.ticket.statusHistory.map((statusChange, statusIndex) => {
+                                  const statusConfig = TICKET_STATUS_CONFIG[statusChange.status as keyof typeof TICKET_STATUS_CONFIG] || { label: statusChange.status, color: 'bg-gray-100 text-gray-800' };
+                                  return (
+                                    <div key={statusChange.id} className="flex items-center gap-2 text-sm">
+                                      <Badge variant="outline" className={`text-xs ${statusConfig.color}`}>
+                                        {statusConfig.label}
+                                      </Badge>
+                                      <span className="text-gray-500">
+                                        {formatTime(statusChange.changedAt)}
+                                      </span>
+                                      <span className="text-gray-600">by {statusChange.changedBy.name}</span>
+                                      {statusChange.timeInStatus && (
+                                        <span className="text-gray-400">({formatDuration(statusChange.timeInStatus)})</span>
+                                      )}
+                                      {statusChange.notes && (
+                                        <span className="text-gray-500 italic truncate max-w-48">"{statusChange.notes}"</span>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
                           
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-4">
@@ -540,6 +711,9 @@ export default function AttendanceDetailView({
                                 <div className="text-xs text-gray-500">
                                   {activity.ticket.customer.companyName}
                                 </div>
+                                <Badge variant="outline" className={`text-xs mt-1 ${TICKET_STATUS_CONFIG[activity.ticket.status as keyof typeof TICKET_STATUS_CONFIG]?.color || 'bg-gray-100 text-gray-800'}`}>
+                                  {TICKET_STATUS_CONFIG[activity.ticket.status as keyof typeof TICKET_STATUS_CONFIG]?.label || activity.ticket.status}
+                                </Badge>
                               </div>
                             )}
                           </div>
@@ -616,12 +790,15 @@ export default function AttendanceDetailView({
                     <div className="flex items-start gap-4">
                       <div className="flex flex-col items-center">
                         <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-                        {index < activities.length - 1 && <div className="w-0.5 h-8 bg-gray-200"></div>}
+                        {(activity.ActivityStage && activity.ActivityStage.length > 0) || (index < activities.length - 1) ? <div className="w-0.5 h-8 bg-gray-200"></div> : null}
                       </div>
                       <div className="flex-1 pb-4">
                         <div className="flex items-center gap-2">
                           <Activity className="h-4 w-4 text-blue-600" />
                           <span className="font-medium">{activity.title}</span>
+                          <Badge variant="outline" className={`text-xs ${ACTIVITY_TYPE_CONFIG[activity.activityType]?.color || 'bg-gray-100 text-gray-800'}`}>
+                            {ACTIVITY_TYPE_CONFIG[activity.activityType]?.label || activity.activityType}
+                          </Badge>
                           <span className="text-sm text-gray-500">
                             {formatTime(activity.startTime)}
                             {activity.endTime && ` - ${formatTime(activity.endTime)}`}
@@ -632,6 +809,76 @@ export default function AttendanceDetailView({
                         )}
                         {activity.location && (
                           <p className="text-sm text-gray-500 mt-1">📍 {activity.location}</p>
+                        )}
+                        {activity.ticket && (
+                          <p className="text-sm text-gray-600 mt-1">🎫 Ticket #{activity.ticket.id} - {activity.ticket.customer.companyName}</p>
+                        )}
+
+                        {/* Activity Stages in Timeline */}
+                        {activity.ActivityStage && activity.ActivityStage.length > 0 && (
+                          <div className="mt-2 ml-6 space-y-2">
+                            {activity.ActivityStage.map((stage, stageIndex) => {
+                              const stageConfig = STAGE_CONFIG[stage.stage as keyof typeof STAGE_CONFIG] || { label: stage.stage, color: 'bg-gray-100 text-gray-800', icon: Activity };
+                              const StageIcon = stageConfig.icon;
+                              return (
+                                <div key={stage.id} className="flex items-start gap-3">
+                                  <div className="flex flex-col items-center">
+                                    <div className={`w-2 h-2 rounded-full ${stageConfig.color.includes('bg-') ? stageConfig.color.split(' ')[0].replace('bg-', 'bg-') : 'bg-gray-400'}`}></div>
+                                    {stageIndex < activity.ActivityStage!.length - 1 && <div className="w-0.5 h-6 bg-gray-200"></div>}
+                                  </div>
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-2 text-sm">
+                                      <StageIcon className="h-3 w-3" />
+                                      <span className="font-medium">{stageConfig.label}</span>
+                                      <span className="text-gray-500">
+                                        {formatTime(stage.startTime)}
+                                        {stage.endTime && ` - ${formatTime(stage.endTime)}`}
+                                      </span>
+                                      {stage.duration && (
+                                        <span className="text-gray-400">({formatDuration(stage.duration)})</span>
+                                      )}
+                                    </div>
+                                    {stage.location && (
+                                      <p className="text-xs text-gray-500 mt-1">📍 {stage.location}</p>
+                                    )}
+                                    {stage.notes && (
+                                      <p className="text-xs text-gray-600 mt-1 italic">"{stage.notes}"</p>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {/* Ticket Status Changes in Timeline */}
+                        {activity.activityType === 'TICKET_WORK' && activity.ticket?.statusHistory && activity.ticket.statusHistory.length > 0 && (
+                          <div className="mt-2 ml-6 space-y-2">
+                            <div className="text-xs font-medium text-gray-600 mb-1">Ticket Status Changes:</div>
+                            {activity.ticket.statusHistory.map((statusChange, statusIndex) => {
+                              const statusConfig = TICKET_STATUS_CONFIG[statusChange.status as keyof typeof TICKET_STATUS_CONFIG] || { label: statusChange.status, color: 'bg-gray-100 text-gray-800' };
+                              return (
+                                <div key={statusChange.id} className="flex items-start gap-3">
+                                  <div className="flex flex-col items-center">
+                                    <div className={`w-2 h-2 rounded-full ${statusConfig.color.includes('bg-') ? statusConfig.color.split(' ')[0].replace('bg-', 'bg-') : 'bg-gray-400'}`}></div>
+                                    {statusIndex < activity.ticket!.statusHistory!.length - 1 && <div className="w-0.5 h-6 bg-gray-200"></div>}
+                                  </div>
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-2 text-sm">
+                                      <Badge variant="outline" className={`text-xs ${statusConfig.color}`}>
+                                        {statusConfig.label}
+                                      </Badge>
+                                      <span className="text-gray-500">{formatTime(statusChange.changedAt)}</span>
+                                      <span className="text-gray-600">by {statusChange.changedBy.name}</span>
+                                    </div>
+                                    {statusChange.notes && (
+                                      <p className="text-xs text-gray-600 mt-1 italic">"{statusChange.notes}"</p>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
                         )}
                       </div>
                     </div>
@@ -676,17 +923,112 @@ export default function AttendanceDetailView({
                 Audit Trail
               </CardTitle>
               <CardDescription>
-                Complete history of attendance actions and modifications
+                Complete history of attendance actions and modifications ({auditLogs.length} events)
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="text-center py-8">
-                <Info className="h-8 w-8 mx-auto text-gray-400 mb-2" />
-                <p className="text-sm text-gray-500">Audit logs feature coming soon</p>
-                <p className="text-xs text-gray-400 mt-1">
-                  This will show all check-in/out actions, admin modifications, and system events
-                </p>
-              </div>
+              {auditLogs.length === 0 ? (
+                <div className="text-center py-8">
+                  <Info className="h-8 w-8 mx-auto text-gray-400 mb-2" />
+                  <p className="text-sm text-gray-500">No audit logs found</p>
+                  <p className="text-xs text-gray-400 mt-1">
+                    No system events or modifications recorded for this attendance session
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {auditLogs.map((log, index) => {
+                    const actionConfig = AUDIT_ACTION_CONFIG[log.action as keyof typeof AUDIT_ACTION_CONFIG] || { 
+                      label: log.action.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase()), 
+                      color: 'bg-gray-100 text-gray-800', 
+                      icon: Info 
+                    };
+                    const ActionIcon = actionConfig.icon;
+                    
+                    return (
+                      <div key={log.id} className="border rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                        <div className="flex items-start gap-3">
+                          <div className={`p-2 rounded-lg ${actionConfig.color}`}>
+                            <ActionIcon className="h-4 w-4" />
+                          </div>
+                          <div className="flex-1 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <Badge variant="outline" className={actionConfig.color}>
+                                  {actionConfig.label}
+                                </Badge>
+                                {log.entityType && (
+                                  <span className="text-xs text-gray-500">
+                                    {log.entityType} #{log.entityId}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-right text-sm text-gray-500">
+                                <div className="flex items-center gap-1">
+                                  <Clock className="h-3 w-3" />
+                                  {format(parseISO(log.performedAt), 'MMM dd, HH:mm:ss')}
+                                </div>
+                              </div>
+                            </div>
+                            
+                            <div className="flex items-center gap-2 text-sm">
+                              <User className="h-3 w-3 text-gray-400" />
+                              <span className="text-gray-600">
+                                {log.performedBy ? `${log.performedBy.name} (${log.performedBy.email})` : 'System'}
+                              </span>
+                              {log.ipAddress && (
+                                <span className="text-gray-400">• {log.ipAddress}</span>
+                              )}
+                            </div>
+
+                            {/* Details Section */}
+                            {(log.details || log.oldValue || log.newValue) && (
+                              <div className="mt-2 p-3 bg-gray-50 rounded-md text-sm">
+                                {log.details && typeof log.details === 'object' && (
+                                  <div className="space-y-1">
+                                    {Object.entries(log.details).map(([key, value]) => (
+                                      <div key={key} className="flex justify-between">
+                                        <span className="font-medium text-gray-600">{key.replace(/_/g, ' ')}:</span>
+                                        <span className="text-gray-800">{JSON.stringify(value)}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                                
+                                {log.oldValue && log.newValue && (
+                                  <div className="space-y-2">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-red-600 text-xs">Old:</span>
+                                      <code className="text-xs bg-red-50 px-2 py-1 rounded">
+                                        {JSON.stringify(log.oldValue)}
+                                      </code>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-green-600 text-xs">New:</span>
+                                      <code className="text-xs bg-green-50 px-2 py-1 rounded">
+                                        {JSON.stringify(log.newValue)}
+                                      </code>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {log.status && (
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-gray-500">Status:</span>
+                                <Badge variant="outline" className="text-xs">
+                                  {log.status}
+                                </Badge>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

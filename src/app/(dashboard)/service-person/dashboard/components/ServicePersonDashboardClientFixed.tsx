@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { apiClient } from '@/lib/api/api-client';
 import { toast } from 'sonner';
-import AttendanceWidgetWithLocationCapture from '@/components/attendance/AttendanceWidgetWithLocationCapture';
+import CleanAttendanceWidget from '@/components/attendance/CleanAttendanceWidget';
 import TicketStatusDialogWithLocation from '@/components/tickets/TicketStatusDialogWithLocation';
 import ActivityLogger from '@/components/activity/ActivityLogger';
 import ActivityStatusManager from '@/components/activity/ActivityStatusManager';
@@ -26,6 +26,12 @@ interface Activity {
   endTime?: string;
   location?: string;
   ticketId?: number;
+  ticket?: {
+    id: number;
+    title: string;
+    status: string;
+    priority: string;
+  };
 }
 
 interface Ticket {
@@ -72,7 +78,7 @@ interface ServicePersonDashboardClientProps {
   initialAttendanceData?: any;
 }
 
-export default function ServicePersonDashboardClientFixed({ initialLocation, initialAttendanceData }: ServicePersonDashboardClientProps = {}) {
+export default function ServicePersonDashboardClientFixed({ initialLocation, initialAttendanceData }: ServicePersonDashboardClientProps) {
   const { user } = useAuth();
   // Removed tab state - using unified dashboard
   const [dashboardStats, setDashboardStats] = useState<DashboardStats>({
@@ -91,11 +97,12 @@ export default function ServicePersonDashboardClientFixed({ initialLocation, ini
   // Fetch dashboard data
   const fetchDashboardData = useCallback(async () => {
     try {
+      console.log('fetchDashboardData: Starting data refresh...');
       setIsLoading(true);
       
       // Fetch all data in parallel with individual error handling
       const [activitiesResponse, ticketsResponse, attendanceResponse] = await Promise.allSettled([
-        apiClient.get('/activities?limit=50&includeStages=true'),
+        apiClient.get('/activities?limit=50&includeStages=true&includeTicket=true'),
         apiClient.get('/tickets?filter=assigned-to-service-person&limit=50'),
         apiClient.get('/attendance/status'),
       ]);
@@ -131,12 +138,24 @@ export default function ServicePersonDashboardClientFixed({ initialLocation, ini
         console.error('Tickets API failed:', ticketsResponse.reason);
       }
       setTickets(ticketsData);
+      console.log('Tickets loaded:', ticketsData.length, ticketsData);
 
       // Handle attendance response
       if (attendanceResponse.status === 'fulfilled') {
         const attendanceData = attendanceResponse.value as any;
-        console.log('Attendance API response:', attendanceData);
-        setAttendanceStatus(attendanceData);
+        console.log('fetchDashboardData: Attendance API response:', attendanceData);
+        console.log('fetchDashboardData: isCheckedIn:', attendanceData?.isCheckedIn);
+        console.log('fetchDashboardData: attendance status:', attendanceData?.attendance?.status);
+        // Force state update with new object reference to ensure React detects the change
+        setAttendanceStatus((prev: any) => {
+          const newData = attendanceData ? JSON.parse(JSON.stringify(attendanceData)) : null;
+          // Only update if data actually changed to prevent unnecessary re-renders
+          if (JSON.stringify(prev) !== JSON.stringify(newData)) {
+            console.log('fetchDashboardData: Attendance status updated from:', prev, 'to:', newData);
+            return newData;
+          }
+          return prev;
+        });
       } else {
         console.error('Attendance API failed:', attendanceResponse.reason);
       }
@@ -147,7 +166,7 @@ export default function ServicePersonDashboardClientFixed({ initialLocation, ini
       const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
       const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
-      // Active activities: no endTime
+      // Active activities: no endTime (including WORK_FROM_HOME)
       const activeActivities = activitiesData.filter((a: any) => !a.endTime).length;
 
       // Completed today: activities that ended today
@@ -211,6 +230,12 @@ export default function ServicePersonDashboardClientFixed({ initialLocation, ini
     }, 100);
   }, [fetchDashboardData]);
 
+  const handleAttendanceChange = useCallback(async () => {
+    console.log('handleAttendanceChange called - refreshing dashboard data...');
+    // Refresh dashboard data instead of reloading the page
+    await fetchDashboardData();
+  }, [fetchDashboardData]);
+
   const handleTicketStatusUpdate = (ticket: Ticket) => {
     setSelectedTicket(ticket);
     setShowStatusDialog(true);
@@ -222,6 +247,8 @@ export default function ServicePersonDashboardClientFixed({ initialLocation, ini
   };
 
   const handleStatusUpdate = async () => {
+    console.log('handleStatusUpdate called - refreshing dashboard data...');
+    // Refresh dashboard data instead of reloading the page
     await fetchDashboardData();
   };
 
@@ -256,25 +283,28 @@ export default function ServicePersonDashboardClientFixed({ initialLocation, ini
               {/* Mobile-Optimized Attendance Status */}
               {attendanceStatus && (
                 <div className="mt-2 flex items-center space-x-2">
-                  {attendanceStatus.isCheckedIn ? (
-                    <>
-                      <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                      <span className="text-xs sm:text-sm text-green-200">
-                        Checked In {attendanceStatus.attendance?.checkInAt ? 
-                          new Date(attendanceStatus.attendance.checkInAt).toLocaleTimeString('en-US', {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                            hour12: true
-                          }) : ''
-                        }
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
-                      <span className="text-xs sm:text-sm text-gray-300">Not Checked In</span>
-                    </>
-                  )}
+                  {(() => {
+                    console.log('Header: Rendering attendance status, isCheckedIn:', attendanceStatus.isCheckedIn);
+                    return attendanceStatus.isCheckedIn ? (
+                      <>
+                        <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                        <span className="text-xs sm:text-sm text-green-200">
+                          Checked In {attendanceStatus.attendance?.checkInAt ? 
+                            new Date(attendanceStatus.attendance.checkInAt).toLocaleTimeString('en-US', {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              hour12: true
+                            }) : ''
+                          }
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+                        <span className="text-xs sm:text-sm text-gray-300">Not Checked In</span>
+                      </>
+                    );
+                  })()}
                 </div>
               )}
             </div>
@@ -348,173 +378,25 @@ export default function ServicePersonDashboardClientFixed({ initialLocation, ini
         <div className="space-y-4 sm:space-y-6">
           {/* Attendance Widget */}
           <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
-            <AttendanceWidgetWithLocationCapture 
-              onStatusChange={fetchDashboardData}
-              accuracyThreshold={100}
+            <CleanAttendanceWidget 
+              onStatusChange={handleAttendanceChange}
               initialData={attendanceStatus}
             />
           </div>
 
-          {/* Mobile-Optimized Ticket Work Activities */}
-          {(() => {
-            const ticketActivities = activities.filter(a => a.activityType === 'TICKET_WORK' && !a.endTime);
-            return ticketActivities.length > 0 && (
-              <div className="bg-white rounded-lg shadow-md border-l-4 border-l-blue-500">
-                <div className="p-4 sm:p-6">
-                  <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4 flex items-center gap-2">
-                    <span className="text-lg sm:text-xl">🎫</span>
-                    <span className="truncate">Ticket Work ({ticketActivities.length})</span>
-                  </h3>
-                  <ActivityStatusManager 
-                    activities={ticketActivities}
-                    onActivityChange={handleActivityChange}
-                  />
-                </div>
-              </div>
-            );
-          })()}
-
-          {/* Mobile-Optimized Field Service Activities */}
-          {(() => {
-            const fieldActivities = activities.filter(a => 
-              ['PO_DISCUSSION', 'SPARE_REPLACEMENT', 'INSTALLATION', 'MAINTENANCE_PLANNED'].includes(a.activityType) && !a.endTime
-            );
-            return fieldActivities.length > 0 && (
-              <div className="bg-white rounded-lg shadow-md border-l-4 border-l-orange-500">
-                <div className="p-4 sm:p-6">
-                  <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4 flex items-center gap-2">
-                    <span className="text-lg sm:text-xl">🔧</span>
-                    <span className="truncate">Field Service ({fieldActivities.length})</span>
-                  </h3>
-                  <ActivityStatusManager 
-                    activities={fieldActivities}
-                    onActivityChange={handleActivityChange}
-                  />
-                </div>
-              </div>
-            );
-          })()}
-
-          {/* Mobile-Optimized Work From Home Activities */}
-          {(() => {
-            const wfhActivities = activities.filter(a => a.activityType === 'WORK_FROM_HOME' && !a.endTime);
-            return wfhActivities.length > 0 && (
-              <div className="bg-white rounded-lg shadow-md border-l-4 border-l-green-500">
-                <div className="p-4 sm:p-6">
-                  <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4 flex items-center gap-2">
-                    <span className="text-lg sm:text-xl">🏠</span>
-                    <span className="truncate">Work From Home ({wfhActivities.length})</span>
-                  </h3>
-                  <ActivityStatusManager 
-                    activities={wfhActivities}
-                    onActivityChange={handleActivityChange}
-                  />
-                </div>
-              </div>
-            );
-          })()}
-
-          {/* Mobile-Optimized Other Activities */}
-          {(() => {
-            const otherActivities = activities.filter(a => 
-              !['TICKET_WORK', 'PO_DISCUSSION', 'SPARE_REPLACEMENT', 'INSTALLATION', 'MAINTENANCE_PLANNED', 'WORK_FROM_HOME'].includes(a.activityType) && !a.endTime
-            );
-            return otherActivities.length > 0 && (
-              <div className="bg-white rounded-lg shadow-md border-l-4 border-l-purple-500">
-                <div className="p-4 sm:p-6">
-                  <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4 flex items-center gap-2">
-                    <span className="text-lg sm:text-xl">📋</span>
-                    <span className="truncate">Other Activities ({otherActivities.length})</span>
-                  </h3>
-                  <ActivityStatusManager 
-                    activities={otherActivities}
-                    onActivityChange={handleActivityChange}
-                  />
-                </div>
-              </div>
-            );
-          })()}
-
-          {/* Mobile-Optimized Assigned Tickets */}
-          {tickets.length > 0 && (
-            <div className="bg-white rounded-lg shadow-md border-l-4 border-l-red-500">
-              <div className="p-4 sm:p-6">
-                <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4 flex items-center gap-2">
-                  <span className="text-lg sm:text-xl">🎯</span>
-                  Tickets ({tickets.length})
-                </h3>
-                {/* Mobile-First Ticket Cards */}
-                <div className="space-y-2 sm:space-y-3">
-                  {tickets.map((ticket) => (
-                    <div key={ticket.id} className="bg-gradient-to-r from-gray-50 to-white border border-gray-200 rounded-xl p-3 sm:p-4 hover:shadow-lg active:scale-[0.98] transition-all duration-200 touch-manipulation">
-                      {/* Compact Header */}
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center space-x-2">
-                          <div className="bg-blue-100 text-blue-800 px-2 py-1 rounded-lg text-xs font-bold">
-                            #{ticket.id}
-                          </div>
-                          <div className="flex space-x-1">
-                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${STATUS_CONFIG[ticket.status as keyof typeof STATUS_CONFIG]?.color || 'bg-gray-100 text-gray-800'}`}>
-                              {STATUS_CONFIG[ticket.status as keyof typeof STATUS_CONFIG]?.icon}
-                            </span>
-                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${PRIORITY_CONFIG[ticket.priority as keyof typeof PRIORITY_CONFIG]?.color || 'bg-gray-100 text-gray-800'}`}>
-                              {PRIORITY_CONFIG[ticket.priority as keyof typeof PRIORITY_CONFIG]?.icon}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          {new Date(ticket.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                        </div>
-                      </div>
-
-                      {/* Title */}
-                      <h4 className="text-sm sm:text-base font-semibold text-gray-900 mb-2 line-clamp-2 leading-tight">
-                        {ticket.title}
-                      </h4>
-
-                      {/* Fixed-Layout Key Info Grid */}
-                      <div className="space-y-1.5 mb-3 text-xs text-gray-600">
-                        <div className="flex items-center min-h-[16px]">
-                          <span className="w-16 font-medium text-gray-500 flex-shrink-0">Customer:</span>
-                          <span className="flex-1 truncate">{ticket.customer?.companyName || 'N/A'}</span>
-                        </div>
-                        <div className="flex items-center min-h-[16px]">
-                          <span className="w-16 font-medium text-gray-500 flex-shrink-0">Asset:</span>
-                          <span className="flex-1 truncate">{ticket.asset?.model || 'N/A'}</span>
-                        </div>
-                        <div className="flex items-center min-h-[20px]">
-                          <span className="w-16 font-medium text-gray-500 flex-shrink-0">Serial:</span>
-                          <span className="flex-1 font-mono bg-gray-100 px-1.5 py-0.5 rounded text-xs truncate">
-                            {ticket.asset?.serialNo || 'N/A'}
-                          </span>
-                        </div>
-                        {(ticket.asset?.location || ticket.customer?.address) && (
-                          <div className="flex items-start min-h-[16px]">
-                            <span className="w-16 font-medium text-gray-500 flex-shrink-0 mt-0.5">📍</span>
-                            <span className="flex-1 text-xs leading-relaxed line-clamp-2">
-                              {ticket.asset?.location || ticket.customer?.address}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Action Button */}
-                      <button
-                        onClick={() => handleTicketStatusUpdate(ticket)}
-                        className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 active:from-blue-800 active:to-blue-900 text-white py-2.5 px-4 rounded-lg text-sm font-medium transition-all duration-200 shadow-sm hover:shadow-md touch-manipulation"
-                      >
-                        <span className="flex items-center justify-center space-x-2">
-                          <span>📝</span>
-                          <span>Update Status</span>
-                        </span>
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
+          {/* Consolidated Activity Status Manager - Single Component */}
+          <div className="bg-white rounded-lg shadow-md border-l-4 border-l-blue-500">
+            <div className="p-4 sm:p-6">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4 flex items-center gap-2">
+                <span className="text-lg sm:text-xl">🔄</span>
+                <span className="truncate">Active Activities</span>
+              </h3>
+              <ActivityStatusManager 
+                activities={activities.filter(a => !a.endTime)}
+                onActivityChange={handleActivityChange}
+              />
             </div>
-          )}
-
+          </div>
 
           {/* Mobile-Optimized Create New Activity */}
           <div className="bg-gradient-to-br from-green-50 to-blue-50 rounded-lg shadow-md border border-green-200">
@@ -527,6 +409,90 @@ export default function ServicePersonDashboardClientFixed({ initialLocation, ini
                 activities={activities}
                 onActivityChange={handleActivityChange}
               />
+            </div>
+          </div>
+
+          {/* Enhanced Assigned Tickets - Side by Side Layout */}
+          <div className="bg-white rounded-lg shadow-md border-l-4 border-l-red-500">
+            <div className="p-4 sm:p-6">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4 flex items-center gap-2">
+                <span className="text-lg sm:text-xl">🎯</span>
+                Total Tickets ({tickets.length})
+              </h3>
+              {tickets.length === 0 ? (
+                <div className="text-center py-8">
+                  <div className="text-4xl mb-2">📋</div>
+                  <p className="text-gray-500 text-sm">No tickets assigned yet</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
+                  {tickets.map((ticket) => (
+                    <div key={ticket.id} className="bg-gradient-to-br from-white to-gray-50 border border-gray-200 rounded-xl p-4 hover:shadow-xl hover:border-blue-300 transition-all duration-300 transform hover:-translate-y-1">
+                      {/* Enhanced Header with Status Prominence */}
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center space-x-2">
+                          <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-3 py-1 rounded-lg text-xs font-bold shadow-sm">
+                            #{ticket.id}
+                          </div>
+                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold ${PRIORITY_CONFIG[ticket.priority as keyof typeof PRIORITY_CONFIG]?.color || 'bg-gray-100 text-gray-800'}`}>
+                            {PRIORITY_CONFIG[ticket.priority as keyof typeof PRIORITY_CONFIG]?.icon} {ticket.priority}
+                          </span>
+                        </div>
+                        <div className="text-xs text-gray-500 font-medium">
+                          {new Date(ticket.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        </div>
+                      </div>
+
+                      {/* Prominent Current Status Display */}
+                      <div className="mb-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-medium text-gray-600">Current Status:</span>
+                        </div>
+                        <div className={`inline-flex items-center px-3 py-2 rounded-lg text-sm font-semibold mt-1 ${STATUS_CONFIG[ticket.status as keyof typeof STATUS_CONFIG]?.color || 'bg-gray-100 text-gray-800'} border-2 border-opacity-20`}>
+                          <span className="mr-2">{STATUS_CONFIG[ticket.status as keyof typeof STATUS_CONFIG]?.icon}</span>
+                          <span>{ticket.status.replace(/_/g, ' ')}</span>
+                        </div>
+                      </div>
+
+                      {/* Title */}
+                      <h4 className="text-sm font-semibold text-gray-900 mb-3 line-clamp-2 leading-tight min-h-[2.5rem]">
+                        {ticket.title}
+                      </h4>
+
+                      {/* Compact Key Info */}
+                      <div className="space-y-2 mb-4 text-xs">
+                        <div className="flex items-center">
+                          <span className="w-4 text-gray-400">🏢</span>
+                          <span className="ml-2 font-medium text-gray-600 w-16">Customer:</span>
+                          <span className="flex-1 truncate text-gray-800">{ticket.customer?.companyName || 'N/A'}</span>
+                        </div>
+                        <div className="flex items-center">
+                          <span className="w-4 text-gray-400">⚙️</span>
+                          <span className="ml-2 font-medium text-gray-600 w-16">Asset:</span>
+                          <span className="flex-1 truncate text-gray-800">{ticket.asset?.model || 'N/A'}</span>
+                        </div>
+                        <div className="flex items-center">
+                          <span className="w-4 text-gray-400">🔢</span>
+                          <span className="ml-2 font-medium text-gray-600 w-16">Serial:</span>
+                          <span className="flex-1 font-mono bg-gray-100 px-2 py-1 rounded text-xs truncate">
+                            {ticket.asset?.serialNo || 'N/A'}
+                          </span>
+                        </div>
+                        {(ticket.asset?.location || ticket.customer?.address) && (
+                          <div className="flex items-start">
+                            <span className="w-4 text-gray-400 mt-0.5">📍</span>
+                            <span className="ml-2 font-medium text-gray-600 w-16 mt-0.5">Location:</span>
+                            <span className="flex-1 text-xs leading-relaxed line-clamp-2 text-gray-800">
+                              {ticket.asset?.location || ticket.customer?.address}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>

@@ -39,6 +39,8 @@ import {
   FileText,
   Play,
   Square,
+  CheckCircle,
+  Navigation,
 } from "lucide-react";
 import { apiClient } from "@/lib/api/api-client";
 import { cn } from "@/lib/utils";
@@ -280,10 +282,10 @@ function ActivityLoggerComponent({
   >([]);
   const [ticketsLoading, setTicketsLoading] = useState(false);
 
-  // Get current location for activity logging
+  // Get current location for activity logging with enhanced features
   const getCurrentLocationForActivity = async () => {
     if (!navigator.geolocation) {
-      const errorMsg = "Geolocation is not supported by your browser.";
+      const errorMsg = "Geolocation is not supported by this browser";
       setLocationError(errorMsg);
       return null;
     }
@@ -296,37 +298,71 @@ function ActivityLoggerComponent({
         (resolve, reject) => {
           navigator.geolocation.getCurrentPosition(resolve, reject, {
             enableHighAccuracy: true,
-            timeout: 10000,
-            maximumAge: 60000, // Allow 1 minute old location
+            timeout: 30000, // Increased timeout for better accuracy
+            maximumAge: 0 // No cache - always get fresh location
           });
         }
       );
 
-      const lat = position.coords.latitude;
-      const lng = position.coords.longitude;
+      const { latitude, longitude } = position.coords;
+      console.log('Activity location GPS Accuracy:', position.coords.accuracy, 'meters');
+      
+      // Check if accuracy is good enough (less than 30 meters)
+      if (position.coords.accuracy > 30) {
+        console.warn('Activity location: GPS accuracy is poor:', position.coords.accuracy, 'meters');
+      }
 
-      // Create a basic address from coordinates
-      const address = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+      // Try to get address from coordinates using backend geocoding service
+      let address = '';
+      try {
+        console.log('Activity location: Calling backend geocoding service...');
+        const response = await apiClient.get(`/geocoding/reverse?latitude=${latitude}&longitude=${longitude}`);
+        
+        if (response.data?.success && response.data?.data?.address) {
+          address = response.data.data.address;
+          console.log('Activity location: Backend geocoding successful:', address);
+        } else {
+          console.log('Activity location: Backend geocoding returned no address');
+        }
+      } catch (geocodeError) {
+        console.warn('Activity location: Backend geocoding failed:', geocodeError);
+      }
 
-      const locationData = { lat, lng, address };
+      const locationData = { 
+        lat: latitude, 
+        lng: longitude, 
+        address: address || `${latitude.toFixed(6)}, ${longitude.toFixed(6)}` 
+      };
+      
       setActivityLocation(locationData);
       setLocationError(null);
+
+      toast({
+        title: "Location Captured",
+        description: address || `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,
+      });
 
       return locationData;
     } catch (error: any) {
       let errorMessage = "Could not get your current location.";
 
       if (error.code === 1) {
-        errorMessage =
-          "Location access denied. Please allow location permissions.";
+        errorMessage = "Location access denied. Please ensure location services are enabled.";
       } else if (error.code === 2) {
-        errorMessage =
-          "Location unavailable. Please check your GPS/network connection.";
+        errorMessage = "Location unavailable. Please check your GPS/network connection.";
       } else if (error.code === 3) {
         errorMessage = "Location request timed out. Please try again.";
       }
 
+      console.error('Activity location capture error:', error);
       setLocationError(errorMessage);
+      
+      toast({
+        title: "Location Error",
+        description: errorMessage,
+        variant: "destructive",
+      });
+      
       return null;
     } finally {
       setLocationLoading(false);
@@ -987,94 +1023,78 @@ function ActivityLoggerComponent({
                     {/* Location Status Section */}
                     <div className="space-y-2">
                       <Label className={isMobile ? "text-sm font-medium" : ""}>Activity Location</Label>
-                      <div
-                        className={`p-3 rounded-lg border-2 transition-all duration-300 ${
-                          activityLocation
-                            ? "bg-green-50 border-green-200"
-                            : locationError
-                            ? "bg-red-50 border-red-200"
-                            : "bg-blue-50 border-blue-200"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-2">
-                            {locationLoading ? (
-                              <div className="relative">
-                                <MapPin className="h-5 w-5 text-blue-500" />
-                                <Loader2 className="h-3 w-3 text-blue-600 animate-spin absolute -top-1 -right-1" />
-                              </div>
-                            ) : activityLocation ? (
-                              <div className="relative">
-                                <MapPin className="h-5 w-5 text-green-600" />
-                                <div className="h-3 w-3 text-green-600 absolute -top-1 -right-1 bg-white rounded-full flex items-center justify-center">
-                                  ✓
-                                </div>
-                              </div>
-                            ) : (
-                              <MapPin className="h-5 w-5 text-gray-400" />
-                            )}
-
-                            <div className="flex-1">
-                              <p
-                                className={`text-sm font-medium ${
-                                  activityLocation
-                                    ? "text-green-800"
-                                    : locationError
-                                    ? "text-red-800"
-                                    : "text-gray-600"
-                                }`}
-                              >
-                                {locationLoading
-                                  ? "Getting location..."
-                                  : activityLocation
-                                  ? "Location Ready"
-                                  : locationError
-                                  ? "Location Error"
-                                  : "Location will be captured"}
-                              </p>
-                              <p
-                                className={`text-xs ${
-                                  activityLocation
-                                    ? "text-green-700"
-                                    : locationError
-                                    ? "text-red-700"
-                                    : "text-gray-500"
-                                }`}
-                              >
-                                {locationLoading
-                                  ? "Please allow location access..."
-                                  : activityLocation
-                                  ? `📍 ${activityLocation.address}`
-                                  : locationError
-                                  ? locationError
-                                  : "Current location will be automatically captured"}
-                              </p>
-                            </div>
+                      
+                      {/* Auto-capturing state */}
+                      {locationLoading && (
+                        <div className="bg-blue-50 border border-blue-200 p-3 rounded-lg">
+                          <div className="flex items-center gap-2 text-blue-700">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <span className="text-sm font-medium">Automatically capturing location...</span>
                           </div>
-
-                          {(!activityLocation || locationError) && (
-                            <Button
-                              onClick={getCurrentLocationForActivity}
-                              disabled={locationLoading}
-                              size={isMobile ? "default" : "sm"}
-                              variant="outline"
-                              className={`${isMobile ? 'w-full h-10 text-base touch-manipulation' : 'text-xs'}`}
-                            >
-                              {locationLoading ? (
-                                <>
-                                  <Loader2 className={`${isMobile ? 'h-4 w-4' : 'h-3 w-3'} animate-spin mr-1`} />
-                                  Getting...
-                                </>
-                              ) : (
-                                <>
-                                  <MapPin className={`${isMobile ? 'h-4 w-4' : 'h-3 w-3'} mr-1`} />
-                                  Get Location
-                                </>
-                              )}
-                            </Button>
-                          )}
+                          <p className="text-xs text-blue-600 mt-1">Please allow location access when prompted</p>
                         </div>
-                      </div>
+                      )}
+
+                      {/* Location captured successfully */}
+                      {activityLocation && !locationLoading && (
+                        <div className="bg-green-50 border border-green-200 p-3 rounded-lg">
+                          <div className="flex items-center gap-2 text-green-700 mb-2">
+                            <MapPin className="h-4 w-4" />
+                            <span className="text-sm font-medium">Location captured successfully</span>
+                          </div>
+                          <div className="bg-white p-2 rounded border">
+                            <p className="text-sm font-medium text-gray-900">📍 {activityLocation.address}</p>
+                            <p className="text-xs text-gray-500 mt-1">
+                              Coordinates: {activityLocation.lat.toFixed(6)}, {activityLocation.lng.toFixed(6)}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              Time: {new Date().toLocaleString()}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Location error */}
+                      {locationError && !locationLoading && (
+                        <div className="bg-red-50 border border-red-200 p-3 rounded-lg">
+                          <div className="flex items-center gap-2 text-red-700 mb-1">
+                            <MapPin className="h-4 w-4" />
+                            <span className="text-sm font-medium">Location Error</span>
+                          </div>
+                          <p className="text-xs text-red-600">{locationError}</p>
+                          <Button
+                            onClick={getCurrentLocationForActivity}
+                            disabled={locationLoading}
+                            size="sm"
+                            variant="outline"
+                            className="mt-2 text-xs"
+                          >
+                            <MapPin className="h-3 w-3 mr-1" />
+                            Retry Location
+                          </Button>
+                        </div>
+                      )}
+
+                      {/* Default state - no location yet */}
+                      {!activityLocation && !locationError && !locationLoading && (
+                        <div className="bg-gray-50 border border-gray-200 p-3 rounded-lg">
+                          <div className="flex items-center gap-2 text-gray-600 mb-1">
+                            <MapPin className="h-4 w-4" />
+                            <span className="text-sm font-medium">Location Required</span>
+                          </div>
+                          <p className="text-xs text-gray-500 mb-2">Location will be automatically captured when you open this dialog</p>
+                          <Button
+                            onClick={getCurrentLocationForActivity}
+                            disabled={locationLoading}
+                            size="sm"
+                            variant="outline"
+                            className="text-xs"
+                          >
+                            <MapPin className="h-3 w-3 mr-1" />
+                            Get Location
+                          </Button>
+                        </div>
+                      )}
                     </div>
 
                     <div className={`flex gap-2 pt-4 ${isMobile ? 'flex-col' : 'justify-end flex-row'}`}>

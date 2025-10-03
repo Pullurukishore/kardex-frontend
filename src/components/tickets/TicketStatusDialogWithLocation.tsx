@@ -209,6 +209,8 @@ export function TicketStatusDialogWithLocation({
         };
       }
 
+      console.log('TicketStatusDialog: Updating ticket status with data:', requestData);
+
       const response = await apiClient.patch(`/tickets/${ticket.id}/status`, requestData);
 
       if (response.data) {
@@ -222,8 +224,11 @@ export function TicketStatusDialogWithLocation({
         setComment('');
         setCapturedLocation(null);
         
-        onStatusUpdate();
+        // Close dialog first
         onClose();
+        
+        // Then notify parent to refresh data
+        await onStatusUpdate();
       }
     } catch (error: any) {
       console.error('Status update failed:', error);
